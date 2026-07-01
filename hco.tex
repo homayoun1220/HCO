@@ -1,0 +1,1299 @@
+\documentclass[11pt]{article}
+
+% =====================================================
+% Fonts and encoding
+% =====================================================
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+
+% =====================================================
+% Page layout
+% =====================================================
+\usepackage{geometry}
+\geometry{margin=1in}
+
+% =====================================================
+% Micro-typography
+% =====================================================
+\usepackage{microtype}
+\UseMicrotypeSet[protrusion]{basicmath}
+\microtypesetup{expansion=false}
+\setlength{\emergencystretch}{3em}
+\hyphenpenalty=10000
+\exhyphenpenalty=10000
+
+% =====================================================
+% Graphics and tables
+% =====================================================
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{xcolor}
+
+% =====================================================
+% Mathematics
+% =====================================================
+\usepackage{amsmath, amssymb, amsthm}
+\usepackage{mathtools}
+
+% =====================================================
+% Algorithms
+% =====================================================
+\usepackage{algorithm}
+\usepackage{algorithmic}
+
+% =====================================================
+% References
+% =====================================================
+\usepackage[numbers,sort&compress]{natbib}
+
+% =====================================================
+% Hyperlinks
+% =====================================================
+\usepackage[hidelinks]{hyperref}
+
+% =====================================================
+% Paragraph formatting
+% =====================================================
+\setlength{\parskip}{0.3em}
+\setlength{\parindent}{0pt}
+
+% =====================================================
+% Custom commands
+% =====================================================
+\usepackage{xspace}
+\newcommand{\HCO}{HCO\xspace}
+
+% =====================================================
+% =====================================================
+% Theorem environments
+% =====================================================
+\newtheorem{theorem}{Theorem}
+\newtheorem{lemma}{Lemma}
+\newtheorem{corollary}{Corollary}
+\newtheorem{definition}{Definition}
+\newtheorem{assumption}{Assumption}
+\newtheorem{proposition}{Proposition}
+\theoremstyle{remark}         
+\newtheorem{remark}{Remark}    
+\theoremstyle{plain}          
+% =====================================================
+% Title
+% =====================================================
+\title{Human Challenge Oracle: A Formal Primitive\\
+	for Continuous, Identity-Bound Sybil Resistance}
+
+\author{Homayoun Maleki\\
+	DeustoTech, University of Deusto, Bilbao, Spain}
+
+\date{}
+
+\begin{document}
+	
+	\maketitle
+	
+	\begin{abstract}
+		Open systems face persistent Sybil attacks in which adversaries sustain large
+		numbers of fake identities at sublinear cost. Existing defenses---CAPTCHAs,
+		behavioral biometrics, and Proof-of-Personhood mechanisms---either verify
+		identity only at creation time or impose costs that can be reused and amortized
+		across identities. Neither paradigm enforces a cost that grows proportionally
+		with both the number of sustained identities and the duration of participation.
+		
+		We introduce the \emph{Human Challenge Oracle}~(\HCO), a formal primitive
+		for continuous, identity-bound, rate-limited participation verification.
+		\HCO\ issues fresh challenges bound to individual identities and time
+		windows via cryptographic commitment; valid responses must arrive within
+		a strict deadline. The security argument rests on four structural
+		properties---identity binding~(H1), freshness~(H2), real-time
+		constraint~(H3), and per-channel throughput bound~(H4).
+		Properties~(H1)--(H3) are enforced cryptographically by the construction
+		of Section~\ref{sec:construction}; (H4) is enforced by the latency
+		structure of the participation channel and is \emph{independent of solver
+			identity}. Together, they guarantee that sustaining $s$ identities over
+		$T$ windows costs $\Omega(sT)$ independent channel-windows, whether
+		channels are operated by humans, automated agents, or any combination.
+		No assumption about human cognitive superiority over automated systems
+		is required.
+		
+		We present a concrete hash-based construction satisfying~(H1)--(H3)
+		under standard assumptions (random oracle model, existential
+		unforgeability of signatures), with Algorithm~1 as a formally specified,
+		publicly verifiable verification procedure. We characterize four admissible
+		challenge families and describe practical browser-based instantiations.
+		A preliminary empirical study confirms that current vision-language models
+		are throughput-bounded under strict response deadlines, validating the
+		empirical basis of~(H4). The companion
+		papers~\cite{maleki2026pocmt,maleki2026geometry} develop the formal use
+		of \HCO\ as a consensus resource and the axiomatic impossibility of linear
+		Sybil cost under parallelizable resources, respectively; both are available
+		as arXiv preprints. This paper is self-contained: all results stated here
+		are proved independently of those companion works.
+	\end{abstract}
+	
+	
+	%% =============================================================
+	\section{Introduction}
+	\label{sec:intro}
+	%% =============================================================
+	
+	Open and permissionless systems assume, implicitly or explicitly, that
+	each account represents an independent participant. This assumption is
+	violated by Sybil attacks~\cite{douceur2002sybil}, in which a single
+	adversary creates and operates many fake identities at negligible cost,
+	enabling spam, vote manipulation, coordinated disinformation, and
+	governance abuse. Preventing Sybil attacks at scale remains one of
+	the central unsolved problems in distributed systems security.
+	
+	\noindent\textbf{The failure mode of existing defenses.}
+	The dominant approaches bind participation to a scarce resource.
+	CAPTCHAs~\cite{vonahn2003captcha} exploit a perceptual gap between
+	humans and automated agents at account creation time, but they are
+	fundamentally one-shot: once an account is created, sustained Sybil
+	participation incurs no proportional recurring cost. As modern
+	vision-language models (VLMs) improve, this gap steadily
+	erodes~\cite{sivakorn2016iam,ye2018yet,goodfellow2014multidigit}.
+	CAPTCHA-solving services further commoditize the
+	bypass~\cite{motoyama2010recaptchas}. Text-based CAPTCHA mechanisms
+	have been shown to be breakable at high rates even against hardened
+	designs~\cite{bursztein2011text}.
+	
+	Proof-of-Personhood (PoP) systems~\cite{borge2017proofofpersonhood,ford2020pseudonym}
+	enforce a one-person--one-identity mapping through ceremonies, biometric
+	enrollment, or social vouching. Deployed systems include
+	Worldcoin~\cite{worldcoin2023}, BrightID~\cite{brightid2022}, and
+	Gitcoin Passport~\cite{gitcoin2023}. Like CAPTCHAs, PoP mechanisms
+	raise the cost of identity \emph{creation} but do not constrain ongoing
+	participation: once identities are admitted, adversaries may sustain
+	many of them without proportional recurring cost.
+	
+	Social-graph defenses~\cite{yu2006sybilguard,yu2008sybillimit,danezis2009sybilinfer,wang2013clickstream}
+	constrain Sybil proliferation through trust topology but provide no
+	explicit per-identity per-window cost bound. Behavioral
+	biometrics~\cite{frank2013touchalytics,serwadda2013kids} enable ongoing
+	verification but are proprietary and not designed for open adversarial
+	settings.
+	
+	\noindent\textbf{The structural gap.}
+	All of these defenses fail to enforce a cost that scales
+	\emph{jointly} with the number of sustained identities $s$ and the
+	participation horizon $T$. An adversary sustaining $s$ identities over
+	$T$ windows should face a cost of $\Omega(sT)$---not a one-time fee at
+	creation, and not a resource that can be reused across identities once
+	acquired. The impossibility of achieving this under parallelizable
+	resources (computation, capital) is established in the companion
+	axiomatic paper~\cite{maleki2026geometry}.
+	
+	\noindent\textbf{This paper: \HCO\ as a formal primitive.}
+	We introduce the \emph{Human Challenge Oracle}~(\HCO), a formally
+	specified primitive designed to enforce exactly this cost structure.
+	\HCO\ repeatedly issues fresh, cryptographically identity-bound
+	challenges that must be answered within a strict real-time deadline.
+	The security argument depends on four structural properties:
+	
+	\begin{itemize}
+		\item \textbf{(H1) Identity binding.} A valid response for identity
+		$v$ cannot be credited to any other identity $v' \neq v$.
+		\item \textbf{(H2) Freshness.} Challenges are unpredictable before
+		issuance; precomputation is structurally impossible.
+		\item \textbf{(H3) Real-time constraint.} Responses arriving after
+		deadline $\Delta_{\mathrm{resp}}$ are rejected.
+		\item \textbf{(H4) Per-channel throughput bound.} Any single
+		participation channel---human or automated---produces at most
+		$\tau_h = O(1)$ valid responses per window.
+	\end{itemize}
+	
+	Crucially, the linear cost guarantee does \emph{not} assume that
+	humans outperform automated solvers on individual challenges.
+	Whether a channel is operated by a human, an AI system, or any hybrid
+	is orthogonal to the cost argument: what cannot be avoided is that each
+	identity requires one independent channel-window, and channel-windows
+	cannot be shared across identities or carried across time.
+	
+	This solver-agnostic framing aligns \HCO\ with its companion papers,
+	both available as arXiv preprints.
+	The \HCO\ primitive is used as the participation resource in the
+	PoCmt consensus protocol~\cite{maleki2026pocmt}, which proves
+	backbone-style safety and liveness under partial synchrony. The
+	axiomatic theory establishing that linear Sybil cost requires a
+	non-parallelizable resource is developed in~\cite{maleki2026geometry}.
+	This paper is self-contained: all results stated here are proved
+	independently of those companion works.
+	
+	\noindent\textbf{Contributions.}
+	\begin{enumerate}
+		\item We formally specify \HCO\ as a formal primitive with
+		properties~(H1)--(H4), distinguishing cryptographically
+		enforced properties~(H1)--(H3) from the structural channel
+		constraint~(H4)~(Section~\ref{sec:spec}).
+		\item We present a hash-based construction satisfying~(H1)--(H3)
+		under standard assumptions (random oracle model, existential
+		unforgeability of signatures), with Algorithm~1 as a formally
+		specified and publicly verifiable verification
+		procedure~(Section~\ref{sec:construction}). Property~(H4) is
+		analyzed separately as a structural channel constraint.
+		\item We prove that (H1)--(H4) enforce $C(s,T) = \Omega(sT)$,
+		both per window and in steady state, solver-agnostically
+		(Sections~\ref{sec:cost}--\ref{sec:multiwindow}).
+		\item We characterize four admissible challenge families and
+		describe browser-based instantiations~(Section~\ref{sec:challenges}).
+		\item We present a preliminary empirical evaluation of the throughput
+		bound~(H4) against current VLMs under strict deadlines
+		(Section~\ref{sec:eval}).
+		\item We analyze the construction against relay, outsourcing,
+		replay, precomputation, deepfake, and side-channel
+		attacks~(Section~\ref{sec:security}).
+	\end{enumerate}
+	
+	\noindent\textbf{\HCO\ is not rate limiting.}
+	Standard rate-limiting mechanisms bound request frequency per account
+	or network endpoint. They share none of the structural properties that
+	make \HCO\ a formal primitive with composable cost guarantees:
+	\begin{itemize}
+		\item \emph{Rate limits do not enforce identity binding~(H1).}
+		An adversary creates additional accounts; each gets its own rate
+		budget. The Sybil cost of creating $s$ accounts remains
+		zero---the rate limit is per-account, not per-channel-window.
+		\item \emph{Rate limits do not enforce freshness~(H2).}
+		An adversary precomputes, stockpiles, or replays requests across
+		time windows without penalty.
+		\item \emph{Rate limits do not yield a composable cost theorem.}
+		There is no equivalent of $C(s,T) = \Omega(sT)$ for sustained
+		multi-identity participation over time: without~(H1) and~(H2),
+		the cost of identity replication does not compound.
+		\item \emph{Rate limits do not compose into higher-level protocols.}
+		They produce no cryptographically verifiable, identity-bound
+		participation record usable as a weighting resource in a consensus
+		mechanism or governance system.
+	\end{itemize}
+	The contribution of \HCO\ is the \emph{unification} of
+	cryptographic identity binding, freshness, window locality, and
+	throughput boundedness into a single formal primitive that admits a
+	provable, composable linear cost theorem. Engineering mechanisms
+	such as session serialization or device attestation are concrete
+	instantiations of Property~(H4)---they are how~(H4) is
+	\emph{deployed}, not what \HCO\ \emph{is}.
+	
+	
+	%% =============================================================
+	\section{Related Work}
+	\label{sec:related}
+	%% =============================================================
+	
+	\noindent\textbf{Sybil attacks and graph-based defenses.}
+	Douceur~\cite{douceur2002sybil} established that identity replication
+	cannot be prevented without binding influence to a scarce resource.
+	Graph-based approaches constrain Sybil regions using social network
+	structure: SybilGuard~\cite{yu2006sybilguard} and
+	SybilLimit~\cite{yu2008sybillimit} bound adversarial identity count
+	through random-walk protocols; SybilInfer~\cite{danezis2009sybilinfer}
+	applies probabilistic inference over trust graphs. Clickstream
+	behavioral analysis detects Sybil accounts through usage
+	patterns~\cite{wang2013clickstream}. These mechanisms constrain the
+	\emph{number} of Sybil identities but provide no explicit per-identity
+	per-window cost bound over time.
+	
+	\noindent\textbf{CAPTCHA and one-time verification.}
+	The CAPTCHA framework~\cite{vonahn2003captcha} exploits human
+	perceptual advantage at account creation. reCAPTCHA~\cite{recaptcha2019}
+	and hCaptcha~\cite{hcaptcha2020} extend this with behavioral signals and
+	ML-based risk scoring. These mechanisms are fundamentally one-time: the
+	cost of sustained Sybil participation after account creation is zero.
+	Deep learning now breaks text~\cite{bursztein2011text,ye2018yet} and
+	semantic image CAPTCHAs~\cite{sivakorn2016iam} at high rates, including
+	via multi-digit recognition from distorted
+	imagery~\cite{goodfellow2014multidigit}. CAPTCHA-solving services
+	automate the bypass at commodity prices~\cite{motoyama2010recaptchas}.
+	
+	\noindent\textbf{Proof-of-Personhood.}
+	PoP systems~\cite{borge2017proofofpersonhood,ford2020pseudonym} enforce
+	a one-human--one-identity mapping through physical ceremonies or social
+	vouching. Worldcoin~\cite{worldcoin2023}, BrightID~\cite{brightid2022},
+	and Gitcoin Passport~\cite{gitcoin2023} illustrate deployed approaches.
+	PoP mechanisms raise identity creation cost but provide no continuous
+	guarantee; once admitted, adversaries can sustain many identities
+	without proportional recurring cost.
+	
+	\noindent\textbf{Human--AI performance under time constraints.}
+	Humans exhibit perceptual generalization under noise and distribution
+	shift that deep networks lack~\cite{geirhos2018generalisation,geirhos2019texture},
+	and shortcut learning limits model robustness in novel
+	conditions~\cite{geirhos2020shortcut}. Broader cognitive flexibility
+	distinguishes human reasoning from current AI
+	systems~\cite{lake2017building}. These findings support the empirical
+	plausibility of~(H4) for human channels, though our security argument
+	does not depend on this gap being permanent.
+	
+	\noindent\textbf{Automated solver capabilities.}
+	State-of-the-art VLMs---GPT-4o~\cite{openai2023gpt4},
+	Gemini~\cite{geminiteam2023}, Claude~\cite{anthropic2024claude}---achieve
+	strong performance on unconstrained visual and reasoning tasks.
+	CLIP~\cite{radford2021clip} demonstrates zero-shot visual recognition.
+	However, these models incur inference latencies of several seconds,
+	which conflicts with tight $\Delta_{\mathrm{resp}}$ windows. Our
+	evaluation tests these models under strict deadline enforcement.
+	
+	\noindent\textbf{Behavioral biometrics and continuous authentication.}
+	Touchalytics~\cite{frank2013touchalytics} demonstrates touchscreen
+	behavior as a continuous authentication signal; adversarial impersonation
+	exposes fundamental limits of behavioral
+	biometrics~\cite{serwadda2013kids}. These mechanisms are passive and
+	proprietary, not designed for open adversarial settings or
+	permissionless participation.
+	
+	\noindent\textbf{Trusted hardware.}
+	Intel SGX~\cite{costan2016sgx} and related environments bind computation
+	to physical hardware, enforcing per-device throughput limits. \HCO\
+	does not require trusted hardware; it relies on cryptographic binding
+	and the structural properties of participation channels.
+	
+	\noindent\textbf{Resource-based consensus.}
+	PoW~\cite{nakamoto2008bitcoin} and PoS~\cite{kiayias2017ouroboros} bind
+	influence to parallelizable resources that can be subdivided and reused
+	across identities at sublinear marginal cost~\cite{bonneau2015sok}.
+	The formal impossibility of linear Sybil cost under parallelizable
+	resources is established in~\cite{maleki2026geometry}; the consensus
+	protocol that uses \HCO\ to escape this impossibility is
+	in~\cite{maleki2026pocmt}.
+	
+	\begin{table*}[t]
+		\centering
+		\caption{Comparison of verification mechanisms on dimensions critical
+			for sustained Sybil resistance.}
+		\label{tab:hco-taxonomy}
+		\begin{tabular}{lcccc}
+			\toprule
+			Mechanism & Persistent & Per-identity Rate-Limited
+			& Solver-Agnostic & Cost Scaling \\
+			\midrule
+			CAPTCHAs~\cite{vonahn2003captcha}
+			& No  & No  & No  & One-time \\
+			reCAPTCHA / hCaptcha~\cite{recaptcha2019,hcaptcha2020}
+			& No  & No  & No  & One-time \\
+			Proof-of-Personhood~\cite{borge2017proofofpersonhood}
+			& No  & No  & No  & One-time \\
+			Behavioral biometrics~\cite{frank2013touchalytics}
+			& Yes & Yes & Partial & Unclear \\
+			Proof-of-Work~\cite{nakamoto2008bitcoin}
+			& Yes & No  & Yes & $o(sT)$ \\
+			Proof-of-Stake~\cite{kiayias2017ouroboros}
+			& Yes & No  & Yes & $o(sT)$ \\
+			\textbf{\HCO\ (this work)}
+			& Yes & Yes & Yes & $\Omega(sT)$ \\
+			\bottomrule
+		\end{tabular}
+	\end{table*}
+	
+	Table~\ref{tab:hco-taxonomy} positions \HCO\ relative to prior work.
+	\HCO\ is the only mechanism that simultaneously enforces persistence,
+	per-identity rate limiting, solver-agnosticism, and linear joint cost.
+	
+	
+	%% =============================================================
+	\section{HCO Specification}
+	\label{sec:spec}
+	%% =============================================================
+	
+	\noindent\textbf{Scope of cryptographic enforcement.}
+	Properties~(H1)--(H3) are enforced by the hash-based construction
+	of Section~\ref{sec:construction} under standard cryptographic
+	assumptions. Property~(H4) is a structural constraint on participation
+	channels---enforced either by cognitive serialization (for human
+	channels) or by engineering mechanisms such as session serialization
+	and device attestation (for automated channels). The security proofs
+	of Sections~\ref{sec:cost}--\ref{sec:multiwindow} depend on~(H4)
+	as an assumption whose empirical basis for representative challenge
+	families is validated in Section~\ref{sec:eval}.
+	
+	\subsection{Oracle Interface}
+	
+	\begin{definition}[Human Challenge Oracle]
+		\label{def:hco}
+		A \emph{Human Challenge Oracle} is a stateful oracle
+		\[
+		\HCO(v,\, d,\, j) \;\longrightarrow\; \chi_{v,d,j}
+		\]
+		that, on input a validator identity $v$, window index $d \in \mathbb{N}$,
+		and challenge index $j \in \{1,\ldots,k(d)\}$, outputs a fresh challenge
+		instance $\chi_{v,d,j}$. Each challenge is associated with a response
+		deadline $\Delta_{\mathrm{resp}} \ll \Delta_h$, where $\Delta_h > 0$ is
+		the window duration.
+	\end{definition}
+	
+	A response $\rho$ to $\chi_{v,d,j}$ is \emph{valid} iff:
+	(i)~$\rho$ is received within $\Delta_{\mathrm{resp}}$ of issuance;
+	(ii)~$\rho$ is a correct solution to $\chi_{v,d,j}$;
+	(iii)~$\rho$ is cryptographically bound to the triple $(v,d,j)$.
+	Verification is deterministic and publicly executable without long-term
+	storage of participant data.
+	
+	\subsection{Security Properties}
+	
+	\HCO\ must satisfy the following four structural properties.
+	
+	\begin{itemize}
+		\item \textbf{(H1) Identity binding.} Each challenge $\chi_{v,d,j}$
+		is cryptographically bound to the triple $(v,d,j)$. A valid response
+		to $\chi_{v,d,j}$ is invalid for any other triple
+		$(v',d',j') \neq (v,d,j)$. Responses cannot be shared across
+		identities or reused across windows.
+		
+		\item \textbf{(H2) Freshness.} No computationally bounded adversary
+		can produce a valid response to $\chi_{v,d,j}$ with non-negligible
+		probability before $\chi_{v,d,j}$ is issued. Precomputation and
+		stockpiling are structurally impossible.
+		
+		\item \textbf{(H3) Real-time constraint.} Responses submitted after
+		deadline $\Delta_{\mathrm{resp}}$ are rejected. Together with~(H2),
+		this rules out any strategy separating challenge receipt from response
+		generation across time.
+		
+		\item \textbf{(H4) Per-channel throughput bound.}
+		Under Assumption~\ref{asm:throughput}, any single participation
+		channel---human or automated---produces valid responses for at most
+		$\tau_h = \lfloor\Delta_{\mathrm{resp}}/\delta_{\mathrm{rtt}}\rfloor$
+		distinct challenge indices per window, independently of the number
+		of identities associated with that channel. This property is a
+		structural consequence of channel latency; it is not enforced by
+		the cryptographic construction of Section~\ref{sec:construction}.
+		The axiomatic basis for why non-parallelizable resources enforce
+		linear cost---while parallelizable ones cannot---is established
+		in~\cite{maleki2026geometry}.
+	\end{itemize}
+	
+	\begin{proposition}[Security is solver-agnostic]
+		\label{prop:agnostic}
+		Properties~(H1)--(H2) hold against a PPT adversary
+		$\mathcal{A}_{\mathrm{crypto}}$ under the random oracle model
+		and EUF-CMA; (H3) holds unconditionally. Under these and
+		Assumption~\ref{asm:throughput}~(H4), sustaining $s$ active
+		identities over $T$ windows requires
+		\[
+		C(s,T) \;\geq\; \frac{sT}{\tau_h}
+		\;=\; sT\cdot\frac{\delta_{\mathrm{rtt}}}{\Delta_{\mathrm{resp}}}
+		\]
+		independent channel-windows, regardless of whether channels are
+		operated by humans, automated agents, or any combination. The
+		cost argument depends only on~(H4) and not on computational
+		hardness: the bound holds against any adversary---PPT or
+		unbounded---given Assumption~\ref{asm:throughput}. The
+		impossibility of achieving linear cost under parallelizable
+		resources is established in~\cite{maleki2026geometry}.
+	\end{proposition}
+	
+	The formal proofs of Lemmas~\ref{lem:identity-bound}
+	and~\ref{lem:persistence} and
+	Theorems~\ref{thm:linear-cost}--\ref{thm:steady-state} appear
+	in Sections~\ref{sec:cost}--\ref{sec:multiwindow}.
+	
+	
+	\begin{remark}
+		Properties~(H1)--(H4) jointly constitute a strictly stronger primitive
+		than per-account rate limiting. Rate limiting bounds request frequency
+		but provides no cryptographic identity binding, no freshness guarantee,
+		and no composable cost theorem. \HCO\ provides all four, enabling the
+		$C(s,T) = \Omega(sT)$ result of
+		Sections~\ref{sec:cost}--\ref{sec:multiwindow} and composability with
+		higher-level protocols such as the consensus mechanism
+		of~\cite{maleki2026pocmt}.
+	\end{remark}
+	
+	\subsection{On Property~(H4) and Solver Identity}
+	
+	Property~(H4) asserts that a single channel is throughput-bounded per
+	window under $\Delta_{\mathrm{resp}}$. This is \emph{not} equivalent to
+	assuming that humans outperform machines on individual challenges. A single
+	automated agent may solve any given challenge instantly; what~(H4) asserts
+	is that a single channel cannot handle $\omega(1)$ distinct challenge
+	indices per window within $\Delta_{\mathrm{resp}}$, due to the irreducible
+	latency of each challenge-response round trip (network delivery, processing,
+	submission, and verification). For human channels, cognitive processing
+	time widens this bound further. Empirical validation of~(H4) for specific
+	challenge families is given in Section~\ref{sec:eval}.
+	
+	\noindent\textbf{Two independent bases for~(H4).}
+	Property~(H4) can be grounded in two structurally distinct mechanisms,
+	and either one is sufficient for the security argument.
+	
+	\emph{Cognitive serialization.}
+	Human cognition imposes an irreducible serial bottleneck: a single person
+	cannot attend to, process, and respond to multiple independent challenges
+	simultaneously within a short deadline. This bound derives from cognitive
+	and motor throughput limits, not from any assumption of human superiority
+	over automated solvers.
+	
+	\emph{Channel serialization.}
+	Engineering constraints can enforce~(H4) independently of who or what
+	operates the channel. Concrete mechanisms include:
+	\begin{itemize}
+		\item \textbf{Per-session serialization.} The system issues at most
+		one active challenge per session token at any moment; the browser
+		session or WebSocket connection is the channel boundary. A channel
+		serving multiple identities in parallel must hold multiple concurrent
+		sessions, each incurring its own round-trip budget.
+		\item \textbf{Device-bound attestation.} Challenges are bound to
+		a specific hardware token, secure enclave, or TPM that enforces
+		a per-device rate limit. Scaling to $s$ identities requires $s$
+		independently attested devices.
+		\item \textbf{Stateful interaction locality.} Challenges require
+		continuous interaction with a dynamically mutating UI element
+		throughout $\Delta_{\mathrm{resp}}$, making parallel execution across
+		identities on a single device structurally difficult.
+	\end{itemize}
+	
+	Under channel serialization, the bound on $\tau_h$ is a systems
+	constraint rather than a cognitive claim: it follows from the
+	serialization enforced by the channel architecture. The formal security
+	argument of Sections~\ref{sec:cost}--\ref{sec:multiwindow} holds under
+	either basis for~(H4); deployments may select the enforcement mechanism
+	best suited to their trust model and accessibility requirements.
+	
+	\subsection{Separability and Composability}
+	
+	The security guarantees of \HCO\ depend only on~(H1)--(H4). Application-level
+	details---user interfaces, challenge formats, delivery channels---do not affect
+	these guarantees. This separability enables \HCO\ to be instantiated across
+	diverse systems and composed with higher-level protocols. Its formal use as a
+	primitive in the PoCmt consensus mechanism is developed
+	in~\cite{maleki2026pocmt}.
+	
+	
+	%% =============================================================
+	\section{Cryptographic Construction}
+	\label{sec:construction}
+	%% =============================================================
+	
+	We present a concrete hash-based instantiation of \HCO\ satisfying
+	Properties~(H1)--(H3) under standard assumptions: the random oracle
+	model~\cite{bellare1993random} for the hash function, and existential
+	unforgeability under chosen-message attack for the signature scheme.
+	Property~(H4) is a channel-level structural constraint, analyzed
+	separately in Section~\ref{sec:spec} and empirically validated
+	in Section~\ref{sec:eval}. The construction is self-contained and
+	requires no trusted hardware.
+	
+	\subsection{Setup}
+	
+	Let $\mathcal{H}: \{0,1\}^* \to \{0,1\}^\lambda$ be a collision-resistant
+	hash function modeled as a random oracle~\cite{bellare1993random}, with
+	security parameter $\lambda$. We instantiate $\mathcal{H}$ with
+	SHA-3~\cite{nist2015sha3} in practice. Each identity $v$ holds a
+	long-term key pair $(\mathsf{sk}_v, \mathsf{pk}_v)$ with $\mathsf{pk}_v$
+	registered with the system.
+	
+	At the start of each window $d$, a fresh nonce
+	$\eta_d \in \{0,1\}^\lambda$ is drawn from a public randomness
+	beacon~\cite{syta2017drand} and publicly broadcast. The nonce is
+	unpredictable before window $d$ opens and publicly verifiable thereafter.
+	
+	\subsection{Challenge Generation}
+	
+	For identity $v$, window $d$, and index $j \in \{1,\ldots,k(d)\}$:
+	\begin{equation}
+		\chi_{v,d,j}
+		\;=\;
+		\Bigl(
+		\underbrace{\mathcal{H}(\mathsf{pk}_v \;\|\; d \;\|\; j \;\|\; \eta_d)}_{\text{binding tag}},
+		\;\;
+		\underbrace{\pi_{v,d,j}}_{\text{task payload}}
+		\Bigr),
+		\label{eq:challenge-gen}
+	\end{equation}
+	where $\pi_{v,d,j}$ is a task payload from an admissible challenge
+	family (Section~\ref{sec:challenges}). The binding tag anchors the
+	challenge to $(v,d,j)$ and the window-specific nonce.
+	
+	\subsection{Response and Verification}
+	
+	A participant submits:
+	\[
+	\rho \;=\; \bigl(\sigma_v,\; r_{v,d,j}\bigr),
+	\]
+	where $r_{v,d,j} \in \mathcal{R}$ is the task solution and
+	$\sigma_v = \mathsf{Sign}(\mathsf{sk}_v,\;
+	\mathsf{pk}_v \;\|\; d \;\|\; j \;\|\; r_{v,d,j})$.
+	Algorithm~\ref{alg:verify} gives the complete verification procedure.
+	
+	\begin{algorithm}[t]
+		\caption{$\HCO.\mathsf{Verify}(v,\, d,\, j,\, \rho,\, t_{\mathrm{recv}})$}
+		\label{alg:verify}
+		\begin{algorithmic}[1]
+			\REQUIRE Identity $v$, window $d$, index $j$,
+			response $\rho = (\sigma_v, r_{v,d,j})$,
+			receipt time $t_{\mathrm{recv}}$
+			\ENSURE \textbf{Accept} or \textbf{Reject}
+			\IF{$t_{\mathrm{recv}} > t_{\mathrm{issue}} + \Delta_{\mathrm{resp}}$}
+			\RETURN \textbf{Reject} \hfill\COMMENT{Deadline exceeded --- enforces (H3)}
+			\ENDIF
+			\IF{$\lnot\;\mathsf{VerifySig}\!\bigl(\mathsf{pk}_v,\;
+				\mathsf{pk}_v \;\|\; d \;\|\; j \;\|\; r_{v,d,j},\; \sigma_v\bigr)$}
+			\RETURN \textbf{Reject} \hfill\COMMENT{Invalid signature --- enforces (H1)}
+			\ENDIF
+			\STATE Recompute binding tag:
+			$\tau \leftarrow \mathcal{H}(\mathsf{pk}_v \;\|\; d \;\|\; j \;\|\; \eta_d)$
+			\IF{binding tag in $\chi_{v,d,j}$ $\neq$ $\tau$}
+			\RETURN \textbf{Reject} \hfill\COMMENT{Wrong identity/window --- enforces (H1)}
+			\ENDIF
+			\IF{$\lnot\;\mathsf{CheckTask}(r_{v,d,j},\; \pi_{v,d,j})$}
+			\RETURN \textbf{Reject} \hfill\COMMENT{Incorrect task solution}
+			\ENDIF
+			\RETURN \textbf{Accept}
+		\end{algorithmic}
+	\end{algorithm}
+	
+	\subsection{Security of the Construction}
+	
+	We establish each property against the adversary model of
+	Section~\ref{sec:model}. Properties~(H1)--(H2) hold against the
+	PPT adversary $\mathcal{A}_{\mathrm{crypto}}$; (H3) holds
+	unconditionally; (H4) follows from
+	Assumption~\ref{asm:throughput} against any adversary.
+	
+	\noindent\textbf{Identity binding~(H1).}
+	Against a PPT adversary $\mathcal{A}_{\mathrm{crypto}}$, the
+	binding tag $\mathcal{H}(\mathsf{pk}_v \;\|\; d \;\|\; j \;\|\;
+	\eta_d)$ ties the challenge to $(v,d,j)$. A valid response
+	includes a signature under $\mathsf{sk}_v$; producing a valid
+	response for $v' \neq v$ requires either forging a signature under
+	$\mathsf{sk}_v$---infeasible under EUF-CMA---or finding a hash
+	collision---infeasible in the random oracle
+	model~\cite{bellare1993random}.
+	
+	\noindent\textbf{Freshness~(H2).}
+	Against a PPT adversary $\mathcal{A}_{\mathrm{crypto}}$, the nonce
+	$\eta_d$ is revealed only at the start of window $d$. Because $\eta_d$
+	is hidden prior to window $d$, the binding tag
+	$\mathcal{H}(\mathsf{pk}_v \|\, d \|\, j \|\, \eta_d)$ is
+	computationally indistinguishable from uniform before $d$ opens.
+	No PPT adversary can compute $\chi_{v,d,j}$ before $\eta_d$ is
+	known, ruling out precomputation in the random oracle
+	model~\cite{bellare1993random}.
+	
+	\noindent\textbf{Real-time constraint~(H3).}
+	This property holds \emph{unconditionally}, independently of
+	adversarial computational power. Line~1 of
+	Algorithm~\ref{alg:verify} checks the receipt timestamp
+	deterministically and independently of the task solution.
+	Late responses are rejected regardless of the adversary's
+	computational capabilities.
+	
+	\noindent\textbf{Throughput bound~(H4).}
+	The cryptographic construction does not enforce~(H4); this property
+	is captured by Assumption~\ref{asm:throughput} and arises from the
+	latency structure of the participation channel. Each valid response
+	requires: (i)~receiving $\chi_{v,d,j}$ after its issuance;
+	(ii)~computing $r_{v,d,j}$ and $\sigma_v$; (iii)~transmitting $\rho$
+	and having it received within $\Delta_{\mathrm{resp}}$. The minimum
+	round-trip latency $\delta_{\mathrm{rtt}}$ limits any channel to at most
+	$\tau_h = \lfloor\Delta_{\mathrm{resp}}/\delta_{\mathrm{rtt}}\rfloor$
+	responses per window. For human channels, cognitive processing time
+	further reduces this ceiling. The security results of
+	Sections~\ref{sec:cost}--\ref{sec:multiwindow} are stated conditionally
+	on Assumption~\ref{asm:throughput}; empirical characterization of
+	$\tau_h$ for representative challenge families is given in
+	Section~\ref{sec:eval}.
+	
+	
+	%% =============================================================
+	\section{System and Adversary Model}
+	\label{sec:model}
+	%% =============================================================
+	
+	\subsection{System Model}
+	
+	The system consists of a set of identities $\mathcal{I}$ interacting with
+	a platform relying on \HCO\ for continuous verification. Time is divided
+	into windows $d \in \mathbb{N}$ of fixed duration $\Delta_h$.
+	
+	An identity $v$ is \emph{active} in window $d$ iff it submits at least
+	one valid \HCO\ response during $d$. Verification is deterministic,
+	public, and requires no long-term storage of participant data.
+	
+	\subsection{Adversary Model}
+	
+	We consider a two-layer adversary model reflecting the two-layer
+	structure of \HCO's security guarantees.
+	
+	\noindent\textbf{Cryptographic layer~((H1)--(H3)).}
+	For the purposes of the construction in Section~\ref{sec:construction},
+	we consider a probabilistic polynomial-time~(PPT) adversary
+	$\mathcal{A}_{\mathrm{crypto}}$ bounded by the security parameter
+	$\lambda$. Properties~(H1) and~(H2) hold against
+	$\mathcal{A}_{\mathrm{crypto}}$ under the random oracle model and
+	existential unforgeability of the signature scheme~(EUF-CMA).
+	Property~(H3) holds unconditionally: the deadline check in
+	Algorithm~\ref{alg:verify} is deterministic and requires no
+	computational assumption.
+	
+	\noindent\textbf{Structural layer~((H4)).}
+	For the cost analysis of
+	Sections~\ref{sec:cost}--\ref{sec:multiwindow}, we consider a
+	computationally unbounded adversary $\mathcal{A}$ that may:
+	\begin{itemize}
+		\item create and coordinate an arbitrary number of identities $s$;
+		\item operate up to $m$ independent participation channels (human or
+		automated) within any window, with $m$ adaptively varying across windows;
+		\item employ outsourcing, relay attacks, AI automation, or any combination;
+		\item deviate arbitrarily from the protocol, subject to
+		Assumption~\ref{asm:throughput}~(H4).
+	\end{itemize}
+	The cost results of Sections~\ref{sec:cost}--\ref{sec:multiwindow}
+	hold unconditionally given Assumption~\ref{asm:throughput},
+	independently of adversarial computational power.
+	
+	\subsection{Adversarial Cost Function}
+	
+	\begin{definition}[Adversarial cost]
+		$C(s, T)$ denotes the minimum number of independent participation
+		channel-windows required to sustain $s$ active identities over $T$
+		consecutive windows.
+	\end{definition}
+	
+	\begin{assumption}[Channel Throughput Bound]
+		\label{asm:throughput}
+		Let $\delta_{\mathrm{rtt}} > 0$ denote the minimum round-trip
+		latency of a participation channel under $\Delta_{\mathrm{resp}}$,
+		where a round trip consists of challenge delivery, response
+		computation, and receipt acknowledgement. Any single participation
+		channel produces at most
+		\[
+		\tau_h \;=\; \left\lfloor \frac{\Delta_{\mathrm{resp}}}{\delta_{\mathrm{rtt}}} \right\rfloor
+		\]
+		valid responses per window, independently of the number of
+		identities associated with that channel.
+	\end{assumption}
+	
+	\begin{remark}[Bases for Assumption~\ref{asm:throughput}]
+		\label{rem:h4-bases}
+		Assumption~\ref{asm:throughput} can be grounded in two
+		structurally distinct mechanisms.
+		\emph{(i)~Cognitive serialization:} for human channels,
+		cognitive and motor processing time sets
+		$\delta_{\mathrm{rtt}} \geq \delta_{\mathrm{cog}}$, where
+		$\delta_{\mathrm{cog}}$ is the irreducible human response latency
+		for the deployed challenge family (empirically characterized
+		in Section~\ref{sec:eval}).
+		\emph{(ii)~Channel serialization:} for automated channels,
+		$\delta_{\mathrm{rtt}}$ is bounded below by network propagation
+		delay plus inference latency; current VLMs incur
+		$\delta_{\mathrm{rtt}} \geq 8\,\mathrm{s}$ under standard
+		inference APIs (Section~\ref{sec:eval}), giving
+		$\tau_h \leq 1$ for $\Delta_{\mathrm{resp}} \leq 8\,\mathrm{s}$.
+		Either basis is sufficient for the security argument of
+		Sections~\ref{sec:cost}--\ref{sec:multiwindow}.
+	\end{remark}
+	
+	%% =============================================================
+	\section{Sybil Cost Analysis}
+	\label{sec:cost}
+	%% =============================================================
+	
+	\begin{lemma}[Per-window identity bound]
+		\label{lem:identity-bound}
+		Under Assumption~\ref{asm:throughput}, in any window $d$, an adversary
+		operating $m$ participation channels can produce valid \HCO\ responses
+		for at most
+		\[
+		m \cdot \tau_h \;=\; m \cdot
+		\left\lfloor\frac{\Delta_{\mathrm{resp}}}{\delta_{\mathrm{rtt}}}\right\rfloor
+		\]
+		distinct identities.
+	\end{lemma}
+	
+	\begin{proof}
+		By Assumption~\ref{asm:throughput}~(H4), each of $m$ channels produces
+		at most $\tau_h = \lfloor\Delta_{\mathrm{resp}}/\delta_{\mathrm{rtt}}\rfloor$
+		valid responses per window. By~(H1), a response for identity $v$ cannot
+		be credited to $v' \neq v$; responses are non-sharable across identities.
+		By~(H2) and~(H3), precomputed or late responses are rejected.
+		The total valid responses attributable to distinct identities is
+		therefore at most $m \cdot \tau_h$.
+	\end{proof}
+	
+	\begin{theorem}[Linear Sybil cost]
+		\label{thm:linear-cost}
+		Under~(H1)--(H3) and Assumption~\ref{asm:throughput}~(H4), sustaining
+		$s$ active identities in any single window requires
+		\[
+		m \;\geq\; \left\lceil\frac{s}{\tau_h}\right\rceil
+		\;=\; \left\lceil s \cdot
+		\frac{\delta_{\mathrm{rtt}}}{\Delta_{\mathrm{resp}}}\right\rceil
+		\]
+		independent participation channels. Equivalently,
+		$C(s,1) \geq s/\tau_h = s \cdot \delta_{\mathrm{rtt}}/\Delta_{\mathrm{resp}}$.
+	\end{theorem}
+	
+	\begin{proof}
+		From Lemma~\ref{lem:identity-bound}, $m\tau_h \ge s$, giving
+		$m \ge s/\tau_h = s \cdot \delta_{\mathrm{rtt}}/\Delta_{\mathrm{resp}}$.
+		Since $\tau_h = \lfloor\Delta_{\mathrm{resp}}/\delta_{\mathrm{rtt}}\rfloor$
+		is fixed under Assumption~\ref{asm:throughput}, this gives $m = \Omega(s)$.
+		Each channel-window incurs a non-zero participation cost, so
+		$C(s,1) \geq s/\tau_h$.
+	\end{proof}
+	
+	\begin{corollary}[No sublinear amortization]
+		\label{cor:no-sublinear}
+		No adversary can sustain $s$ identities with $o(s)$ channels per window,
+		regardless of the value of $\tau_h$.
+	\end{corollary}
+	
+	\begin{proof}
+		Amortizing one channel across multiple identities in the same window
+		violates~(H1). Cross-window reuse violates~(H2)--(H3). Both are
+		excluded by construction, independently of $\delta_{\mathrm{rtt}}$
+		or $\Delta_{\mathrm{resp}}$.
+	\end{proof}
+	
+	
+	%% =============================================================
+	\section{Multi-Window and Long-Term Analysis}
+	\label{sec:multiwindow}
+	%% =============================================================
+	
+	Let $s_d$ and $m_d$ denote the number of active identities and channels,
+	respectively, in window $d$.
+	
+	\begin{lemma}[Window persistence bound]
+		\label{lem:persistence}
+		Under Assumption~\ref{asm:throughput},
+		$s_d \le m_d \cdot \tau_h = m_d \cdot
+		\lfloor\Delta_{\mathrm{resp}}/\delta_{\mathrm{rtt}}\rfloor$
+		for every window $d$.
+	\end{lemma}
+	
+	\begin{proof}
+		Lemma~\ref{lem:identity-bound} applied to window $d$. Since~(H2)--(H3)
+		prevent cross-window reuse, effort in window $d$ cannot carry to $d+1$.
+	\end{proof}
+	
+	\begin{theorem}[Joint linear cost]
+		\label{thm:joint-linear}
+		Under~(H1)--(H3) and Assumption~\ref{asm:throughput}~(H4),
+		\[
+		C(s,T) \;\geq\; \frac{sT}{\tau_h}
+		\;=\; sT \cdot \frac{\delta_{\mathrm{rtt}}}{\Delta_{\mathrm{resp}}}.
+		\]
+	\end{theorem}
+	
+	\begin{proof}
+		By Lemma~\ref{lem:persistence}, each of $T$ windows independently
+		requires at least $s/\tau_h$ channels. Channels cannot be reused
+		across windows by~(H2)--(H3), so the total cost is
+		$\sum_{d=1}^{T} s/\tau_h = sT/\tau_h$.
+	\end{proof}
+	
+	\begin{corollary}[Concrete security bound]
+		\label{cor:concrete}
+		For a deployment with $\Delta_{\mathrm{resp}} = 10\,\mathrm{s}$ and
+		$\delta_{\mathrm{rtt}} = 100\,\mathrm{ms}$, giving $\tau_h = 100$:
+		sustaining $s$ identities over $T$ windows requires at least $sT/100$
+		independent channel-windows. At a per-channel operational cost of $c$
+		(wages, API credits, or infrastructure), the adversarial budget is at
+		least $c \cdot sT/100$. Tightening $\Delta_{\mathrm{resp}}$ to
+		$1\,\mathrm{s}$ with the same $\delta_{\mathrm{rtt}}$ gives
+		$\tau_h = 10$ and tightens the bound to $c \cdot sT/10$.
+	\end{corollary}
+	
+	\begin{theorem}[Steady-state Sybil capacity]
+		\label{thm:steady-state}
+		Under Assumption~\ref{asm:throughput}, let
+		$\bar{m} = \limsup_{T\to\infty}\frac{1}{T}\sum_{d=1}^{T}m_d$.
+		Then
+		\[
+		\limsup_{T\to\infty}\frac{1}{T}\sum_{d=1}^{T}s_d
+		\;\le\; \bar{m}\cdot\tau_h
+		\;=\; \bar{m}\cdot
+		\left\lfloor\frac{\Delta_{\mathrm{resp}}}{\delta_{\mathrm{rtt}}}\right\rfloor.
+		\]
+	\end{theorem}
+	
+	\begin{proof}
+		Sum $s_d \le m_d\tau_h$ over $T$ windows, divide by $T$, take
+		$\limsup$. The bound is explicit in $\Delta_{\mathrm{resp}}$ and
+		$\delta_{\mathrm{rtt}}$ via Assumption~\ref{asm:throughput}.
+	\end{proof}
+	
+	\noindent\textbf{Burst attacks.}
+	Concentrating effort in short bursts does not help: the total
+	identity-window budget $B_T = \sum_{d=1}^T s_d$ satisfies
+	$B_T \le \tau_h\sum_{d=1}^T m_d$, so burst attacks incur linear
+	cost in total channel-windows regardless of temporal concentration.
+	
+	
+	%% =============================================================
+	\section{Challenge Families}
+	\label{sec:challenges}
+	%% =============================================================
+	
+	\subsection{Abstract Admissibility Requirements}
+	
+	A challenge family $\mathcal{C}$ is \emph{admissible} for \HCO\ if
+	every instance satisfies~(H1)--(H4). Concretely:
+	\begin{itemize}
+		\item instances are unpredictable before issuance~(H2);
+		\item correct responses are deterministically verifiable;
+		\item responses are cryptographically bound to $(v,d,j)$~(H1)
+		via the construction of Section~\ref{sec:construction};
+		\item the interaction model imposes an irreducible per-response
+		latency that limits channel throughput to $\tau_h$ per window~(H4).
+	\end{itemize}
+	The construction of Section~\ref{sec:construction} satisfies~(H1)--(H3)
+	for any task payload; admissibility under~(H4) depends on the interaction
+	latency of the specific task family.
+	
+	\subsection{Admissible Families}
+	
+	\noindent\textbf{Perceptual visual matching.}
+	A distorted or noise-corrupted image is shown with candidate matches;
+	the participant selects the correct correspondence within
+	$\Delta_{\mathrm{resp}}$. Human perceptual generalization under noise
+	remains robust~\cite{geirhos2018generalisation}; current VLMs incur
+	multi-second inference latencies that enforce a natural throughput ceiling
+	per automated channel. Instances are generated by random visual
+	transformations; verification is deterministic.
+	
+	\noindent\textbf{Interactive reasoning tasks.}
+	Short dependent reasoning sequences require maintaining intermediate
+	state and submitting a result before a visible countdown expires.
+	Multi-step inference latency limits automated throughput. Correctness
+	is verified deterministically from dynamically generated parameters.
+	
+	\noindent\textbf{Biometric-light response tasks.}
+	A fresh, unpredictable prompt requires a synchronized real-time signal
+	(spoken phrase, motion gesture). Automated synthesis under real-time
+	constraints is currently unreliable and produces detectable latency
+	artifacts. Verification uses transient signal features without
+	long-term biometric enrollment.
+	
+	\noindent\textbf{Attention-based interaction tasks.}
+	A dynamic scene requires continuous tracking or selection over several
+	seconds, occupying the full $\Delta_{\mathrm{resp}}$ interval. This
+	structurally limits any channel to one response per window.
+	
+	\subsection{Deployment Example: Relaxed Window Sizes}
+	\label{sec:deployment-example}
+	
+	The formal guarantees of~\HCO\ hold across the full parameter space of
+	$\Delta_{\mathrm{resp}}$ and $\tau_h$, from sub-second strict deadlines
+	to relaxed daily interaction windows. A concrete example illustrates
+	the range.
+	
+	\noindent\textbf{Daily participation with device-bound login.}
+	Consider a system in which each identity must perform one login-style
+	interaction per day: $\Delta_h = 24\,\text{h}$, $\Delta_{\mathrm{resp}}
+	= 24\,\text{h}$, and $\tau_h = 1$. A single human has 24 hours to
+	respond---there is no cognitive pressure. However, if the login is
+	\emph{device-bound} (bound to a specific smartphone, secure element, or
+	attested browser session), then sustaining $s$ identities requires $s$
+	independent attested devices or sessions. An adversary cannot amortize
+	one device across $s$ identities within the same window: each identity
+	requires its own channel-window.
+	
+	Under this configuration, Theorem~\ref{thm:joint-linear} gives
+	$C(s,T) = \Omega(sT)$ channel-windows even with $\tau_h = 1$. Sybil
+	resistance does not depend on the challenge being cognitively demanding
+	or time-pressured; it depends entirely on channel non-transferability
+	(H1) and window-locality~(H4) enforced by the device binding.
+	
+	This example also clarifies the design space: tighter
+	$\Delta_{\mathrm{resp}}$ values (seconds to minutes) provide stronger
+	near-real-time resistance but impose higher usability cost. Relaxed
+	windows (hours to daily) reduce user burden while preserving the
+	linear cost structure, provided channel binding is enforced
+	engineering-side. The appropriate point in this tradeoff is a
+	deployment-level decision orthogonal to the formal guarantees.
+	
+	\subsection{Rotation and Composability}
+	
+	\HCO\ does not depend on any single family. Systems may rotate across
+	admissible families between windows or combine them within a window.
+	Since security depends only on~(H1)--(H4), rotation preserves all
+	guarantees of Theorems~\ref{thm:joint-linear}
+	and~\ref{thm:steady-state}---this is essential for long-lived
+	deployments where the automation landscape evolves.
+	
+	
+	%% =============================================================
+	\section{Empirical Evaluation}
+	\label{sec:eval}
+	%% =============================================================
+	
+	We conduct a preliminary empirical study to validate~(H4): that
+	representative challenge families impose a measurable throughput bound
+	on current automated systems under strict response deadlines, and that
+	honest human participants complete challenges at high rates within
+	$\Delta_{\mathrm{resp}}$. We emphasize that these results are preliminary;
+	a large-scale study is planned as future work
+	(see Section~\ref{sec:limitations}).
+	
+	\subsection{Methodology}
+	
+	\noindent\textbf{Human participants.}
+	We recruited 30 participants (ages 18--45) through university mailing
+	lists. Each participant completed 20 challenges per family (80 total)
+	via a browser-based interface with a visible countdown timer.
+	
+	\noindent\textbf{Automated solvers.}
+	We evaluated GPT-4o~\cite{openai2023gpt4}, Gemini~1.5~Pro~\cite{geminiteam2023},
+	and Claude~3.5~Sonnet~\cite{anthropic2024claude} via their standard
+	vision-language inference APIs, plus a specialized CAPTCHA-solving
+	service (2captcha) for the perceptual family. We ran 100 trials per
+	(solver, family) pair. A trial was counted as successful only if a
+	correct response was \emph{received} within the simulated
+	$\Delta_{\mathrm{resp}}$ window; inference latency exceeding
+	$\Delta_{\mathrm{resp}}$ counted as failure regardless of correctness.
+	
+	\subsection{Results}
+	
+	\begin{table*}[t]
+		\centering
+		\caption{Preliminary results under strict $\Delta_{\mathrm{resp}}$
+			constraints. Automated success includes both incorrect
+			solutions and deadline violations.}
+		\label{tab:evaluation-results}
+		\resizebox{\linewidth}{!}{%
+			\begin{tabular}{lcccc}
+				\toprule
+				Challenge Family
+				& Human Success (\%)
+				& Human Mean Time (s)
+				& Automated Success (\%)
+				& Auto.\ Mean Time (s) \\
+				\midrule
+				Perceptual visual matching  & 92  & 6.2  & 12          & 18.4 \\
+				Interactive reasoning       & 85  & 11.8 & 18          & 22.1 \\
+				Biometric-light response    & 100 & 8.1  & $\approx 0$ & --   \\
+				Attention-based interaction & 95  & 14.5 & $\approx 0$ & --   \\
+				\bottomrule
+			\end{tabular}%
+		}
+	\end{table*}
+	
+	Human participants achieved high success rates across all families,
+	with mean completion times well below typical $\Delta_{\mathrm{resp}}$
+	values. Automated solvers were primarily limited by inference latency:
+	mean response times of 18.4\,s and 22.1\,s for perceptual and
+	reasoning families substantially exceed the 8--15\,s deadlines tested,
+	confirming that current VLMs impose a natural throughput ceiling
+	consistent with~(H4).
+	
+	
+	%% =============================================================
+	\section{Security Analysis}
+	\label{sec:security}
+	%% =============================================================
+	
+	We analyze \HCO\ against the principal adversarial strategies. All
+	arguments are grounded in~(H1)--(H4) and the construction of
+	Section~\ref{sec:construction}.
+	
+	\noindent\textbf{Automated solving.}
+	An adversary deploying AI solvers to fill participation channels does
+	not circumvent the linear cost bound. By~(H4), each automated channel
+	is throughput-bounded at $\tau_h$ responses per window under
+	$\Delta_{\mathrm{resp}}$. Scaling to $s$ identities requires $\Omega(s)$
+	independent channels. Automation shifts the cost from human labor to
+	API credits or hardware, but preserves linear scaling in $s$.
+	
+	\noindent\textbf{Human outsourcing and labor markets.}
+	An adversary may hire human workers or use CAPTCHA-solving
+	services~\cite{motoyama2010recaptchas} to solve challenges.
+	This attack is captured in the adversary model: the adversary operates
+	$m$ human channels. Sustaining $s$ identities requires $m = \Omega(s)$
+	workers (Theorem~\ref{thm:linear-cost}). Outsourcing converts the cost
+	from direct labor to wages, but the linear scaling is preserved.
+	
+	\noindent\textbf{Relay and real-time forwarding attacks.}
+	Relaying challenges to external solvers adds network round-trip time,
+	which tightens rather than relaxes~(H4). By~(H1) and~(H2)--(H3),
+	relayed responses are identity-bound and non-reusable; relaying does
+	not reduce the total independent channel-windows required.
+	
+	\noindent\textbf{Replay and solution reuse attacks.}
+	By~(H1), response $\rho_{v,d,j}$ is bound to $(v,d,j)$ via the
+	signature $\sigma_v$ and the binding tag. Submitting the same response
+	for $(v',d',j') \neq (v,d,j)$ fails the binding-tag check in
+	Algorithm~\ref{alg:verify} (lines~3--5). By~(H2), the nonce $\eta_d$
+	ensures responses prepared before window $d$ are invalid.
+	
+	\noindent\textbf{Precomputation and batch-solving.}
+	By~(H2), $\chi_{v,d,j}$ cannot be computed before $\eta_d$ is revealed.
+	Batch-solving within a window is bounded by~(H4): processing $k > \tau_h$
+	challenges requires more than $\tau_h$ round-trip latency budgets,
+	which is infeasible under $\Delta_{\mathrm{resp}}$.
+	
+	\noindent\textbf{Synthetic media and deepfake attacks.}
+	For biometric-light families, an adversary may attempt real-time synthesis
+	of a biometric response. Mitigations include: (i)~challenge freshness~(H2)
+	prevents off-line synthesis; (ii)~liveness detection flags synthesized
+	signals; (iii)~challenge rotation to families resistant to synthesis
+	(e.g., attention-based interaction) eliminates reliance on vulnerable
+	modalities.
+	
+	\noindent\textbf{Side-channel and man-in-the-browser attacks.}
+	A malicious browser extension may observe and forward challenges to an
+	external solver. This constitutes a relay attack and is bounded as above.
+	Deployment-level countermeasures---content-security-policy headers,
+	subresource integrity, and challenge obfuscation---reduce exfiltration
+	feasibility but are orthogonal to the core security model.
+	
+	\noindent\textbf{Privacy and data minimization.}
+	Verification requires only $\rho = (\sigma_v, r_{v,d,j})$ and
+	$\chi_{v,d,j}$; no raw biometric data or behavioral record is stored.
+	$\mathsf{pk}_v$ may be pseudonymous. Privacy-preserving challenge
+	delivery ensuring unlinkability across windows while preserving identity
+	binding is an important direction for future work.
+	
+	
+	%% =============================================================
+	\section{Limitations}
+	\label{sec:limitations}
+	%% =============================================================
+	
+	\noindent\textbf{Scope of the cryptographic guarantees.}
+	The hash-based construction of Section~\ref{sec:construction}
+	provides cryptographic enforcement of~(H1)--(H3).
+	Property~(H4)---formalized as Assumption~\ref{asm:throughput}---is
+	\emph{not} a cryptographic guarantee; it is a structural property of
+	the participation channel parameterized by
+	$\tau_h = \lfloor\Delta_{\mathrm{resp}}/\delta_{\mathrm{rtt}}\rfloor$.
+	All cost results (Theorems~\ref{thm:linear-cost}
+	and~\ref{thm:joint-linear}) are explicitly conditional on
+	Assumption~\ref{asm:throughput}. The security degradation as $\tau_h$
+	grows is quantified in Corollary~\ref{cor:concrete}: a tenfold
+	increase in $\tau_h$ weakens the channel-window lower bound by a
+	factor of ten, but does not invalidate the linear scaling in $s$
+	and $T$. This distinction is intentional: \HCO\ is a \emph{formal}
+	primitive whose security combines a cryptographic
+	layer~((H1)--(H3)) with a systems layer~((H4)). The limitations
+	below address each layer separately.
+	
+	\noindent\textbf{Adversary model and layer separation.}
+	The two-layer adversary model of Section~\ref{sec:model} reflects
+	a deliberate design choice. Properties~(H1)--(H2) require a PPT
+	adversary $\mathcal{A}_{\mathrm{crypto}}$ for their cryptographic
+	security arguments; relaxing this to an unbounded adversary would
+	require information-theoretic constructions---unconditionally hiding
+	commitments, one-time signatures---that are beyond the scope of
+	this work. Property~(H3) and all cost results
+	(Theorems~\ref{thm:linear-cost}--\ref{thm:steady-state}) hold
+	unconditionally given Assumption~\ref{asm:throughput}, independently
+	of computational power. This separation has a concrete implication:
+	advances in computational power alone do not weaken \HCO's
+	Sybil-resistance guarantee. Only reductions in
+	$\delta_{\mathrm{rtt}}$---via faster hardware, lower-latency
+	inference, or co-located solvers---affect the cost bound, and
+	these are addressed by adjusting $\Delta_{\mathrm{resp}}$
+	accordingly.
+	
+	\noindent\textbf{Dependence on Assumption~\ref{asm:throughput}~(H4).}
+	The linear cost guarantee rests on Assumption~\ref{asm:throughput}.
+	For human channels, $\delta_{\mathrm{rtt}}$ is bounded below by
+	cognitive and motor processing time; for automated channels, by
+	inference and network latency. Advances in specialized hardware or
+	ultra-low-latency inference pipelines could reduce
+	$\delta_{\mathrm{rtt}}$, increasing $\tau_h$ and weakening the
+	per-channel-window guarantee. However, the linear scaling in $s$ and
+	$T$ is preserved regardless of $\tau_h$: the bound
+	$C(s,T) \geq sT/\tau_h$ degrades gracefully as $\tau_h$ grows,
+	reducing to a constant-factor weakening rather than a qualitative
+	breakdown. Long-lived deployments must periodically reassess
+	$\delta_{\mathrm{rtt}}$ and adjust $\Delta_{\mathrm{resp}}$
+	accordingly, analogous to difficulty adjustment in
+	PoW~\cite{nakamoto2008bitcoin}.
+	
+	\noindent\textbf{Engineering bypass and the nature of~(H4).}
+	When~(H4) is enforced through channel serialization rather than
+	cognitive constraints, adversaries may attempt to scale channel capacity
+	through infrastructure: VM farms, cloud phone emulators, browser-bot
+	fleets, or distributed worker pools. Such infrastructure does not
+	invalidate~(H4); it instead converts the guarantee from an
+	\emph{impossibility} into a \emph{cost multiplier}. Each additional
+	sustained identity still requires provisioning and operating an
+	independent channel, so the adversarial cost remains $\Omega(sT)$---but
+	$\tau_h$ and the per-channel cost are now determined by engineering
+	practice rather than cognition.
+	
+	This is analogous to the role of honest-majority in Byzantine consensus:
+	the guarantee holds given the assumption, and the assumption has a
+	concrete cost to violate. The honest disclosure of this structure---that
+	\HCO\ bounds adversarial \emph{cost} rather than adversarial
+	\emph{capability}---makes the primitive more trustworthy, not less.
+	Deployments relying on channel serialization should therefore size
+	$\Delta_{\mathrm{resp}}$ and per-channel costs such that operating a
+	large farm is economically prohibitive for the target threat model.
+	
+	\noindent\textbf{Scope of the preliminary evaluation.}
+	The study uses 30 participants recruited via university mailing lists,
+	not a controlled recruitment platform~\cite{prolific2014,peer2022data}.
+	It does not cover task-specific fine-tuned models, custom hardware
+	solvers, or organized human--AI hybrid pipelines. A large-scale study
+	(N~$\geq$~100 via Prolific, comprehensive adversarial solver suite,
+	statistical significance testing) is planned as future work.
+	
+	\noindent\textbf{Accessibility and inclusivity.}
+	Challenge families requiring visual, auditory, or motor interaction may
+	exclude participants with relevant impairments. Deployments must provide
+	alternative modalities and accessibility-aware selection policies.
+	
+	\noindent\textbf{Parameter sensitivity.}
+	$\Delta_{\mathrm{resp}}$ and $k(d)$ jointly determine the security-usability
+	tradeoff. The formal guarantees hold for any $\Delta_{\mathrm{resp}} > 0$,
+	but concrete parameterization requires empirical measurement of $\tau_h$
+	and honest participant success rates in the target deployment environment.
+	
+	\noindent\textbf{Theoretical scope.}
+	The cost results assume~(H1)--(H3) hold and Assumption~\ref{asm:throughput}
+	(H4) is satisfied throughout execution. Partial failures of~(H4)---
+	arising when $\delta_{\mathrm{rtt}}$ falls below the modeled floor---
+	yield intermediate scaling regimes in which $C(s,T) = \Omega(sT/\tau_h)$
+	with larger $\tau_h$. The axiomatic framework characterizing which
+	resource structures admit or preclude linear cost---and the formal
+	impossibility of achieving $C(s,T) = \Omega(sT)$ under parallelizable
+	resources---is developed in~\cite{maleki2026geometry}.
+	
+	
+	%% =============================================================
+	\section{Conclusion}
+	\label{sec:conclusion}
+	%% =============================================================
+	
+	We introduced the Human Challenge Oracle~(\HCO), a formal primitive
+	for continuous, identity-bound, rate-limited participation verification,
+	combining a cryptographic layer enforcing~(H1)--(H3) with a structural
+	channel constraint enforcing~(H4). Under Properties~(H1)--(H4), \HCO\ enforces
+	$C(s,T) = \Omega(sT)$: sustaining $s$ identities over $T$ windows
+	requires $\Omega(sT)$ independent channel-windows, regardless of
+	whether channels are operated by humans, automated agents, or any
+	combination thereof. No assumption about human cognitive superiority
+	is required.
+	
+	We presented a hash-based construction satisfying~(H1)--(H3) under
+	standard cryptographic assumptions, with Algorithm~\ref{alg:verify}
+	as the formal verification procedure. We identified four admissible
+	challenge families, described browser-based instantiations, and
+	conducted a preliminary empirical study confirming that current VLMs
+	impose a natural throughput ceiling under strict response deadlines,
+	validating the empirical basis of~(H4).
+	
+	\HCO\ is designed as a composable primitive. Its formal use as a
+	consensus resource---including backbone-style safety, liveness, and
+	fairness---is developed in~\cite{maleki2026pocmt}. The axiomatic
+	cost-theoretic foundation establishing that linear Sybil cost requires
+	a non-parallelizable resource is given in~\cite{maleki2026geometry}.
+	
+	The most immediate priorities for future work are a large-scale empirical
+	study (N~$\geq$~100, controlled recruitment, comprehensive adversarial
+	solvers), privacy-preserving challenge delivery with cross-window
+	unlinkability, formal composability analysis in the UC framework, and
+	adaptive challenge rotation mechanisms that preserve~(H1)--(H4) under
+	evolving automation capabilities.
+	
+	
+	\bibliographystyle{unsrtnat}
+	\bibliography{references}
+	
+	
+\end{document}
