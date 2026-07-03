@@ -1,10 +1,14 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import { useT } from '../i18n/LanguageContext'
 
 export default function Perceptual({ challengeData, onSubmit, disabled }) {
   const t = useT()
   const [selected, setSelected] = useState(null)
+
+  useEffect(() => {
+    setSelected(null)
+  }, [challengeData])
 
   if (!challengeData?.options?.length || !challengeData?.original_b64) {
     return (
@@ -19,9 +23,10 @@ export default function Perceptual({ challengeData, onSubmit, disabled }) {
     )
   }
 
-  const handleSubmit = () => {
-    if (selected === null || disabled) return
-    onSubmit({ selected_index: selected })
+  const handleSelect = (idx) => {
+    if (disabled) return
+    setSelected(idx)
+    onSubmit({ selected_index: idx })
   }
 
   return (
@@ -49,7 +54,7 @@ export default function Perceptual({ challengeData, onSubmit, disabled }) {
               key={idx}
               type="button"
               disabled={disabled}
-              onClick={() => setSelected(idx)}
+              onClick={() => handleSelect(idx)}
               whileHover={{ scale: disabled ? 1 : 1.03 }}
               whileTap={{ scale: disabled ? 1 : 0.97 }}
               className={`rounded-xl overflow-hidden border-2 transition-all duration-200 ${
@@ -67,17 +72,6 @@ export default function Perceptual({ challengeData, onSubmit, disabled }) {
           ))}
         </div>
       </div>
-
-      <motion.button
-        type="button"
-        onClick={handleSubmit}
-        disabled={selected === null || disabled}
-        whileHover={{ scale: selected !== null && !disabled ? 1.02 : 1 }}
-        whileTap={{ scale: selected !== null && !disabled ? 0.98 : 1 }}
-        className="px-8 py-3 rounded-xl bg-accent text-background font-semibold disabled:opacity-40 disabled:cursor-not-allowed transition-opacity"
-      >
-        {t('perceptual.submit')}
-      </motion.button>
     </div>
   )
 }
