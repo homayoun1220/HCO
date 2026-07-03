@@ -19,6 +19,7 @@ from challenges import attention, biometric, perceptual, reasoning
 
 FAMILIES = ["perceptual", "reasoning", "attention", "biometric"]
 TRIALS_PER_FAMILY = 5
+TOTAL_TRIALS = len(FAMILIES) * TRIALS_PER_FAMILY
 COMPLETION_CODE = os.environ.get("HCO_COMPLETION_CODE", "HCO-STUDY-COMPLETE")
 
 GENERATORS = {
@@ -108,6 +109,13 @@ async def challenge_issue(body: ChallengeIssueRequest):
     session = await db.get_session(body.session_id)
     if session is None:
         raise HTTPException(status_code=404, detail="Session not found")
+
+    if session.get("completed_at"):
+        raise HTTPException(status_code=409, detail="Study already completed")
+
+    submitted_trials = await db.count_submitted_trials(body.session_id)
+    if submitted_trials >= TOTAL_TRIALS:
+        raise HTTPException(status_code=409, detail="Study already completed")
 
     if body.family not in GENERATORS:
         raise HTTPException(status_code=400, detail=f"Unknown family: {body.family}")

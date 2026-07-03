@@ -189,6 +189,16 @@ async def submit_trial(
         await db.commit()
 
 
+async def count_submitted_trials(session_id: str) -> int:
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            "SELECT COUNT(*) FROM trials WHERE session_id = ? AND status = 'submitted'",
+            (session_id,),
+        ) as cursor:
+            row = await cursor.fetchone()
+            return row[0] or 0
+
+
 async def get_session_score(session_id: str) -> Dict[str, int]:
     async with aiosqlite.connect(DB_PATH) as db:
         async with db.execute(

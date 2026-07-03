@@ -61,6 +61,9 @@ export default function App() {
               setScore={setScore}
               completionCode={completionCode}
               setCompletionCode={setCompletionCode}
+              setSessionId={setSessionId}
+              setParticipantId={setParticipantId}
+              setBlockOrder={setBlockOrder}
             />
           }
         />

@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { completeSession } from '../api'
+import { clearSession } from '../sessionStorage'
 import { useT } from '../i18n/LanguageContext'
 import LanguageBar from '../components/LanguageBar'
 
@@ -10,6 +11,9 @@ export default function Debrief({
   setScore,
   setCompletionCode,
   completionCode,
+  setSessionId,
+  setParticipantId,
+  setBlockOrder,
 }) {
   const t = useT()
 
@@ -21,10 +25,22 @@ export default function Debrief({
           if (data.score) {
             setScore({ passed: data.score.passed, total: data.score.total })
           }
+          clearSession()
+          setSessionId?.(null)
+          setParticipantId?.(null)
+          setBlockOrder?.([])
         })
         .catch(console.error)
     }
-  }, [sessionId, completionCode, setCompletionCode, setScore])
+  }, [
+    sessionId,
+    completionCode,
+    setCompletionCode,
+    setScore,
+    setSessionId,
+    setParticipantId,
+    setBlockOrder,
+  ])
 
   return (
     <div className="min-h-screen flex items-center justify-center px-6 py-12">
