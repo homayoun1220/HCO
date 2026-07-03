@@ -4,8 +4,8 @@ import es from './es'
 
 export const LANG_STORAGE_KEY = 'hco_lang'
 export const LANGUAGES = {
-  en: { code: 'en', label: 'English', flag: '🇬🇧', translations: en },
-  es: { code: 'es', label: 'Español', flag: '🇪🇸', translations: es },
+  en: { code: 'en', label: 'English', flagSrc: '/flags/gb.svg', translations: en },
+  es: { code: 'es', label: 'Español', flagSrc: '/flags/es.svg', translations: es },
 }
 
 function getNested(obj, path) {
