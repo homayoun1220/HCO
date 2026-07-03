@@ -10,7 +10,7 @@ import Reasoning from '../components/Reasoning'
 import Attention from '../components/Attention'
 import Biometric from '../components/Biometric'
 import ChallengeErrorBoundary from '../components/ChallengeErrorBoundary'
-import { isStudyEligible, loadSession, saveSession } from '../sessionStorage'
+import { clearSession, isStudyEligible, loadSession, saveSession } from '../sessionStorage'
 import { useT } from '../i18n/LanguageContext'
 
 const TRIALS_PER_FAMILY = 5
@@ -56,10 +56,26 @@ export default function Study({
   const challengeIdRef = useRef(null)
   const submittingRef = useRef(false)
   const loadRequestRef = useRef(0)
+  const sessionRecoveryRef = useRef(false)
 
   const familyIndex = Math.floor((trialNum - 1) / TRIALS_PER_FAMILY)
   const trialInFamily = (trialNum - 1) % TRIALS_PER_FAMILY
   const currentFamily = blockOrder[familyIndex]
+
+  const createSession = useCallback(async () => {
+    const { data } = await startSession(prolificPid, studyId)
+    const session = {
+      session_id: data.session_id,
+      participant_id: data.participant_id,
+      block_order: data.block_order,
+    }
+    saveSession(session)
+    setSessionId(data.session_id)
+    setParticipantId(data.participant_id)
+    setBlockOrder(data.block_order)
+    sessionRecoveryRef.current = false
+    return data.session_id
+  }, [prolificPid, studyId, setSessionId, setParticipantId, setBlockOrder])
 
   // Restore or create session before issuing challenges
   useEffect(() => {
@@ -86,18 +102,9 @@ export default function Study({
       }
 
       try {
-        const { data } = await startSession(prolificPid, studyId)
         if (cancelled) return
-
-        const session = {
-          session_id: data.session_id,
-          participant_id: data.participant_id,
-          block_order: data.block_order,
-        }
-        saveSession(session)
-        setSessionId(data.session_id)
-        setParticipantId(data.participant_id)
-        setBlockOrder(data.block_order)
+        await createSession()
+        if (cancelled) return
         setSessionReady(true)
       } catch (err) {
         console.error('Failed to start session', err)
@@ -116,7 +123,25 @@ export default function Study({
     setSessionId,
     setParticipantId,
     setBlockOrder,
+    createSession,
   ])
+
+  const applyChallengeResponse = useCallback((requestId, family, data) => {
+    if (requestId !== loadRequestRef.current) return false
+
+    const nextData = data.challenge_data
+    if (!isChallengeDataReady(family, nextData)) {
+      throw new Error('Incomplete challenge data from server')
+    }
+
+    setChallengeId(data.challenge_id)
+    challengeIdRef.current = data.challenge_id
+    setChallengeData(nextData)
+    setDeltaResp(data.delta_resp ?? nextData.delta_resp ?? 10)
+    setLoading(false)
+    setTimerRunning(true)
+    return true
+  }, [])
 
   const loadChallenge = useCallback(async (sid, family, tIndex) => {
     const requestId = ++loadRequestRef.current
@@ -131,27 +156,49 @@ export default function Study({
 
     try {
       const { data } = await issueChallenge(sid, family, tIndex)
-
-      if (requestId !== loadRequestRef.current) return
-
-      const nextData = data.challenge_data
-      if (!isChallengeDataReady(family, nextData)) {
-        throw new Error('Incomplete challenge data from server')
-      }
-
-      setChallengeId(data.challenge_id)
-      challengeIdRef.current = data.challenge_id
-      setChallengeData(nextData)
-      setDeltaResp(data.delta_resp ?? nextData.delta_resp ?? 10)
-      setLoading(false)
-      setTimerRunning(true)
+      applyChallengeResponse(requestId, family, data)
     } catch (err) {
       if (requestId !== loadRequestRef.current) return
+
+      const status = err?.response?.status
+      const staleSession = status === 404 || status === 409
+
+      if (staleSession && !sessionRecoveryRef.current && isStudyEligible()) {
+        sessionRecoveryRef.current = true
+        clearSession()
+        try {
+          const newSid = await createSession()
+          const { data } = await issueChallenge(newSid, family, tIndex)
+          applyChallengeResponse(requestId, family, data)
+          return
+        } catch (retryErr) {
+          console.error('Failed to recover stale session', retryErr)
+        }
+      }
+
       console.error('Failed to issue challenge', err)
       setLoadError(t('study.loadError'))
       setLoading(false)
     }
-  }, [t])
+  }, [applyChallengeResponse, createSession, t])
+
+  const handleRetryLoad = useCallback(async () => {
+    if (!currentFamily) return
+
+    sessionRecoveryRef.current = false
+    clearSession()
+    setSessionReady(false)
+
+    try {
+      const sid = await createSession()
+      setSessionReady(true)
+      await loadChallenge(sid, currentFamily, trialInFamily)
+    } catch (err) {
+      console.error('Failed to restart session', err)
+      setLoadError(t('study.loadError'))
+      setLoading(false)
+    }
+  }, [clearSession, createSession, currentFamily, trialInFamily, loadChallenge, t])
 
   useEffect(() => {
     if (!sessionReady || !sessionId || !currentFamily) return
@@ -283,7 +330,7 @@ export default function Study({
                 <p className="text-danger">{loadError}</p>
                 <motion.button
                   type="button"
-                  onClick={() => loadChallenge(sessionId, currentFamily, trialInFamily)}
+                  onClick={handleRetryLoad}
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
                   className="px-6 py-3 rounded-xl bg-accent text-background font-semibold"
