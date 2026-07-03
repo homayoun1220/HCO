@@ -1,4 +1,62 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 750 500" aria-hidden="true">
-  <rect width="750" height="500" fill="#c60b1e"/>
-  <rect y="125" width="750" height="250" fill="#ffc400"/>
+  <rect width="750" height="500" fill="#AA151B"/>
+  <rect y="125" width="750" height="250" fill="#F1BF00"/>
+
+  <!-- Simplified escudo (Spanish state flag) — readable at small sizes -->
+  <g transform="translate(118 250)">
+    <!-- Crown -->
+    <path fill="#CFAD00" stroke="#6B4E00" stroke-width="3"
+      d="M-34-78h68v10c0 8-6 14-14 14h-40c-8 0-14-6-14-14v-10z"/>
+    <path fill="#CFAD00" stroke="#6B4E00" stroke-width="2.5"
+      d="M-30-78v-16l10 8 10-14 10 14 10-8v16"/>
+    <circle cx="-30" cy="-94" r="4" fill="#E85D4A"/>
+    <circle cx="-10" cy="-98" r="4" fill="#E85D4A"/>
+    <circle cx="10" cy="-98" r="4" fill="#E85D4A"/>
+    <circle cx="30" cy="-94" r="4" fill="#E85D4A"/>
+
+    <!-- Shield -->
+    <path fill="#F7F7F7" stroke="#6B4E00" stroke-width="4"
+      d="M0 72 C-46 56 -58 18 -58-18 C-58-44 -32-62 0-62 C32-62 58-44 58-18 C58 18 46 56 0 72 Z"/>
+
+    <!-- Quartered arms (stylized) -->
+    <path fill="#AA151B" d="M0-58 L-54-20 L-54 8 L0-30 Z"/>
+    <path fill="#F1BF00" d="M0-58 L54-20 L54 8 L0-30 Z"/>
+    <path fill="#F1BF00" d="M0-30 L-54 8 L-54 36 L0 10 Z"/>
+    <path fill="#AA151B" d="M0-30 L54 8 L54 36 L0 10 Z"/>
+
+    <!-- Castle (Castile) -->
+    <g fill="#F1BF00" stroke="#6B4E00" stroke-width="2" transform="translate(-38 -8) scale(0.55)">
+      <rect x="-12" y="-8" width="24" height="22" rx="1"/>
+      <rect x="-16" y="-18" width="8" height="12"/>
+      <rect x="-4" y="-22" width="8" height="16"/>
+      <rect x="8" y="-18" width="8" height="12"/>
+    </g>
+
+    <!-- Lion (León) -->
+    <g fill="#F1BF00" transform="translate(24 2) scale(0.9)">
+      <ellipse cx="0" cy="0" rx="14" ry="10"/>
+      <circle cx="-10" cy="-4" r="5" fill="#F1BF00"/>
+      <path fill="#F1BF00" d="M8 4c6 2 10 8 8 12-4 2-10 0-14-4 2-6 4-10 6-8z"/>
+    </g>
+
+    <!-- Pallets (Aragon) -->
+    <g fill="#AA151B" transform="translate(-36 24)">
+      <rect x="-14" y="-12" width="5" height="24"/>
+      <rect x="-4" y="-12" width="5" height="24"/>
+      <rect x="6" y="-12" width="5" height="24"/>
+    </g>
+
+    <!-- Chains (Navarre) -->
+    <g fill="#6B4E00" transform="translate(24 24)">
+      <rect x="-12" y="-10" width="24" height="4" rx="2"/>
+      <rect x="-12" y="-2" width="24" height="4" rx="2"/>
+      <rect x="-12" y="6" width="24" height="4" rx="2"/>
+    </g>
+
+    <!-- Pomegranate (Granada) -->
+    <g transform="translate(0 48)">
+      <circle r="9" fill="#AA151B"/>
+      <path fill="#2E8B57" d="M0-9c3 0 5 2 5 4s-2 3-5 3-5-1-5-3 2-4 5-4z"/>
+    </g>
+  </g>
 </svg>
