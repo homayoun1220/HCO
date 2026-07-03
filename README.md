@@ -127,6 +127,18 @@ Or use the included `render.yaml` blueprint.
 3. **Framework**: Vite
 4. Set `VITE_API_URL` to your Render backend URL.
 
+## Git workflow
+
+| Branch | Role |
+|--------|------|
+| `main` | Production — deployed to **hco-study.com** |
+| `develop` | v2 integration (blockchain, admin, reporting, frontend) |
+| `feature/*` | Individual features → merge into `develop` |
+
+Current live release: tag **`v1.0.1`** on `main`.
+
+Full branching rules: [BRANCHING.md](BRANCHING.md).
+
 ## Analysis
 
 ```bash
