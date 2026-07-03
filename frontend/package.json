@@ -5,8 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "prebuild": "sh scripts/download-flags.sh",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "flags": "sh scripts/download-flags.sh"
   },
   "dependencies": {
     "axios": "^1.7.9",
