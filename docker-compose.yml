@@ -23,9 +23,12 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
+    env_file:
+      - .env
     environment:
       HCO_DB_PATH: /data/hco_study.db
       HCO_COMPLETION_CODE: ${HCO_COMPLETION_CODE:-HCO-STUDY-COMPLETE}
+      HCO_ADMIN_PASSWORD: ${HCO_ADMIN_PASSWORD:-}
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:8080}
     volumes:
       - hco-db-data:/data

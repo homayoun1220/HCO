@@ -10,11 +10,11 @@ from typing import Any, Dict, List
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel
 
 import crypto
 import db
+from admin_routes import router as admin_router
 from challenges import attention, biometric, perceptual, reasoning
 
 FAMILIES = ["perceptual", "reasoning", "attention", "biometric"]
@@ -54,6 +54,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(admin_router)
 
 
 class SessionStartRequest(BaseModel):
@@ -212,13 +214,3 @@ async def session_complete(body: SessionCompleteRequest):
         "completion_code": COMPLETION_CODE,
         "score": score,
     }
-
-
-@app.get("/api/admin/export")
-async def admin_export():
-    csv_data = await db.export_trials_csv()
-    return PlainTextResponse(
-        content=csv_data,
-        media_type="text/csv",
-        headers={"Content-Disposition": "attachment; filename=trials_export.csv"},
-    )

@@ -7,6 +7,7 @@ import Guide from './pages/Guide'
 import Practice from './pages/Practice'
 import Study from './pages/Study'
 import Debrief from './pages/Debrief'
+import Admin from './pages/Admin'
 import { loadSession } from './sessionStorage'
 
 export default function App() {
@@ -67,6 +68,7 @@ export default function App() {
             />
           }
         />
+        <Route path="/admin" element={<Admin />} />
         <Route path="*" element={<Language />} />
       </Routes>
     </div>

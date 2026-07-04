@@ -85,6 +85,7 @@ Open http://localhost:5173. Vite proxies `/api` to the backend.
 |----------|-------------|---------|
 | `HCO_DB_PATH` | SQLite database path | `backend/hco_study.db` |
 | `HCO_COMPLETION_CODE` | Prolific completion code | `HCO-STUDY-COMPLETE` |
+| `HCO_ADMIN_PASSWORD` | Admin dashboard login (`/admin`) | — (required for admin) |
 | `FRONTEND_URL` | Production frontend URL (CORS) | — |
 | `VITE_API_URL` | Backend URL for frontend build | `` (same origin) |
 
@@ -97,6 +98,20 @@ Open http://localhost:5173. Vite proxies `/api` to the backend.
 5. **Study** — 20 timed trials
 6. **Debrief** — score and completion code
 
+## Admin dashboard
+
+Open **`/admin`** after setting `HCO_ADMIN_PASSWORD` on the backend.
+
+| Feature | Description |
+|---------|-------------|
+| Live stats | Active participants (last 15 min), completed, clean runs |
+| Reports | Pass rate and latency by challenge family |
+| Sessions | All sessions with status (`clean`, `in_progress`, …) |
+| Export | Download CSV (all trials or clean-only) |
+| API health | `/api/health` and `/api/admin/health` |
+
+Stats auto-refresh every 15 seconds while the dashboard is open.
+
 ## API
 
 | Method | Path | Description |
@@ -106,7 +121,11 @@ Open http://localhost:5173. Vite proxies `/api` to the backend.
 | POST | `/api/challenge/issue` | Issue challenge |
 | POST | `/api/challenge/submit` | Submit response |
 | POST | `/api/session/complete` | Complete session |
-| GET | `/api/admin/export` | Export trials CSV |
+| POST | `/api/admin/login` | Admin login (password → token) |
+| GET | `/api/admin/stats` | Dashboard stats (auth required) |
+| GET | `/api/admin/sessions` | Session list (auth required) |
+| GET | `/api/admin/export` | Export trials CSV (auth required; `?clean=true`) |
+| GET | `/api/admin/health` | Admin health (auth required) |
 
 ## Deploy
 
