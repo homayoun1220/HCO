@@ -7,6 +7,7 @@ from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel
 
 import db
+from admin_analytics import build_analytics_report
 from admin_auth import admin_configured, issue_token, require_admin, verify_password
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
@@ -50,6 +51,11 @@ async def admin_export(
         media_type="text/csv",
         headers={"Content-Disposition": f"attachment; filename={filename}"},
     )
+
+
+@router.get("/analytics")
+async def admin_analytics(_: None = Depends(require_admin)):
+    return await build_analytics_report()
 
 
 @router.get("/health")

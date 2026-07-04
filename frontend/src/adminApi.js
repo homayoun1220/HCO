@@ -64,6 +64,11 @@ export async function downloadAdminExport(clean = false) {
   window.URL.revokeObjectURL(url)
 }
 
+export async function fetchAdminAnalytics() {
+  const { data } = await adminClient().get('/api/admin/analytics')
+  return data
+}
+
 export async function fetchPublicHealth() {
   const { data } = await axios.get(`${API_BASE}/api/health`)
   return data

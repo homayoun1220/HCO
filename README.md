@@ -123,6 +123,7 @@ Stats auto-refresh every 15 seconds while the dashboard is open.
 | POST | `/api/session/complete` | Complete session |
 | POST | `/api/admin/login` | Admin login (password → token) |
 | GET | `/api/admin/stats` | Dashboard stats (auth required) |
+| GET | `/api/admin/analytics` | Clean-only charts & insights (auth required) |
 | GET | `/api/admin/sessions` | Session list (auth required) |
 | GET | `/api/admin/export` | Export trials CSV (auth required; `?clean=true`) |
 | GET | `/api/admin/health` | Admin health (auth required) |

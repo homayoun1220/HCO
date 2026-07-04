@@ -409,3 +409,53 @@ async def get_admin_sessions(total_trials: int = 20) -> List[Dict[str, Any]]:
             }
         )
     return sessions
+
+
+def _clean_sessions_subquery(total_trials: int) -> str:
+    return f"""
+        SELECT s.id FROM sessions s
+        WHERE s.completed_at IS NOT NULL
+          AND (SELECT COUNT(*) FROM trials t
+               WHERE t.session_id = s.id AND t.status = 'submitted') = {int(total_trials)}
+    """
+
+
+async def count_clean_sessions(total_trials: int = 20) -> int:
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            f"SELECT COUNT(*) FROM ({_clean_sessions_subquery(total_trials)})"
+        ) as cursor:
+            row = await cursor.fetchone()
+            return row[0] or 0
+
+
+async def fetch_clean_trials(total_trials: int = 20) -> List[Dict[str, Any]]:
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute(
+            f"""
+            SELECT family, latency, passed, correct, latency_fail, correctness_fail
+            FROM trials t
+            WHERE t.status = 'submitted'
+              AND t.session_id IN ({_clean_sessions_subquery(total_trials)})
+            ORDER BY t.id
+            """
+        ) as cursor:
+            rows = await cursor.fetchall()
+    return [dict(row) for row in rows]
+
+
+async def fetch_clean_completion_timeline(total_trials: int = 20) -> List[Dict[str, Any]]:
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute(
+            f"""
+            SELECT substr(s.completed_at, 1, 10) AS day, COUNT(*) AS completions
+            FROM sessions s
+            WHERE s.id IN ({_clean_sessions_subquery(total_trials)})
+            GROUP BY day
+            ORDER BY day
+            """
+        ) as cursor:
+            rows = await cursor.fetchall()
+    return [{"date": row["day"], "completions": row["completions"]} for row in rows if row["day"]]

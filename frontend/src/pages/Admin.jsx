@@ -4,14 +4,21 @@ import {
   adminLogin,
   clearAdminToken,
   downloadAdminExport,
+  fetchAdminAnalytics,
   fetchAdminHealth,
   fetchAdminSessions,
   fetchAdminStats,
   fetchPublicHealth,
   getAdminToken,
 } from '../adminApi'
+import AdminAnalytics from '../components/AdminAnalytics'
 
 const REFRESH_MS = 15000
+const TABS = [
+  { id: 'dashboard', label: 'Dashboard' },
+  { id: 'analytics', label: 'Analytics' },
+  { id: 'sessions', label: 'Sessions' },
+]
 
 function StatCard({ label, value, hint, accent }) {
   return (
@@ -112,8 +119,11 @@ function LoginForm({ onSuccess }) {
 
 export default function Admin() {
   const [authed, setAuthed] = useState(() => !!getAdminToken())
+  const [tab, setTab] = useState('dashboard')
   const [stats, setStats] = useState(null)
+  const [analytics, setAnalytics] = useState(null)
   const [sessions, setSessions] = useState([])
+  const [sessionsFilter, setSessionsFilter] = useState('clean')
   const [health, setHealth] = useState(null)
   const [publicHealth, setPublicHealth] = useState(null)
   const [error, setError] = useState('')
@@ -121,16 +131,23 @@ export default function Admin() {
 
   const loadDashboard = useCallback(async () => {
     try {
-      const [statsData, sessionsData, adminHealth, pubHealth] = await Promise.all([
+      const requests = [
         fetchAdminStats(),
         fetchAdminSessions(),
         fetchAdminHealth(),
         fetchPublicHealth(),
-      ])
-      setStats(statsData)
-      setSessions(sessionsData)
-      setHealth(adminHealth)
-      setPublicHealth(pubHealth)
+      ]
+      if (tab === 'analytics') {
+        requests.push(fetchAdminAnalytics())
+      }
+      const results = await Promise.all(requests)
+      setStats(results[0])
+      setSessions(results[1])
+      setHealth(results[2])
+      setPublicHealth(results[3])
+      if (tab === 'analytics' && results[4]) {
+        setAnalytics(results[4])
+      }
       setError('')
       setLastRefresh(new Date())
     } catch (err) {
@@ -139,6 +156,18 @@ export default function Admin() {
         setAuthed(false)
       } else {
         setError('Failed to load dashboard data.')
+      }
+    }
+  }, [tab])
+
+  const loadAnalytics = useCallback(async () => {
+    try {
+      const data = await fetchAdminAnalytics()
+      setAnalytics(data)
+    } catch (err) {
+      if (err?.response?.status === 401) {
+        clearAdminToken()
+        setAuthed(false)
       }
     }
   }, [])
@@ -150,12 +179,25 @@ export default function Admin() {
     return () => clearInterval(id)
   }, [authed, loadDashboard])
 
+  useEffect(() => {
+    if (!authed || tab !== 'analytics') return undefined
+    loadAnalytics()
+    const id = setInterval(loadAnalytics, 30000)
+    return () => clearInterval(id)
+  }, [authed, tab, loadAnalytics])
+
   const handleLogout = () => {
     clearAdminToken()
     setAuthed(false)
     setStats(null)
     setSessions([])
+    setAnalytics(null)
   }
+
+  const visibleSessions = sessions.filter((row) => {
+    if (sessionsFilter === 'all') return true
+    return row.status === 'clean'
+  })
 
   if (!authed) {
     return <LoginForm onSuccess={() => setAuthed(true)} />
@@ -208,6 +250,25 @@ export default function Admin() {
           </div>
         )}
 
+        <div className="flex flex-wrap gap-2 mb-8 border-b border-[#2a2a38] pb-4">
+          {TABS.map(({ id, label }) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setTab(id)}
+              className={`px-4 py-2 rounded-xl text-sm font-medium transition-colors ${
+                tab === id
+                  ? 'bg-accent text-background'
+                  : 'text-gray-400 hover:text-white hover:bg-card'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {tab === 'dashboard' && (
+          <>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
           <StatCard
             label="Active now"
@@ -306,9 +367,36 @@ export default function Admin() {
             </div>
           </div>
         </div>
+          </>
+        )}
 
+        {tab === 'analytics' && <AdminAnalytics data={analytics} />}
+
+        {tab === 'sessions' && (
         <div className="rounded-2xl border border-[#2a2a38] bg-card p-6">
-          <h2 className="text-lg font-semibold mb-4">Sessions</h2>
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
+            <h2 className="text-lg font-semibold">Sessions</h2>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setSessionsFilter('clean')}
+                className={`px-3 py-1.5 rounded-lg text-sm ${
+                  sessionsFilter === 'clean' ? 'bg-accent text-background' : 'bg-background border border-[#2a2a38] text-gray-400'
+                }`}
+              >
+                Clean only
+              </button>
+              <button
+                type="button"
+                onClick={() => setSessionsFilter('all')}
+                className={`px-3 py-1.5 rounded-lg text-sm ${
+                  sessionsFilter === 'all' ? 'bg-accent text-background' : 'bg-background border border-[#2a2a38] text-gray-400'
+                }`}
+              >
+                All
+              </button>
+            </div>
+          </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
@@ -322,7 +410,7 @@ export default function Admin() {
                 </tr>
               </thead>
               <tbody>
-                {sessions.map((row) => (
+                {visibleSessions.map((row) => (
                   <tr key={row.session_id} className="border-b border-[#2a2a38]/60">
                     <td className="py-3 pr-4 whitespace-nowrap">
                       {row.started_at?.slice(0, 19).replace('T', ' ')}
@@ -340,15 +428,16 @@ export default function Admin() {
                     </td>
                   </tr>
                 ))}
-                {!sessions.length && (
+                {!visibleSessions.length && (
                   <tr>
-                    <td colSpan={6} className="py-6 text-gray-500">No sessions yet.</td>
+                    <td colSpan={6} className="py-6 text-gray-500">No sessions match this filter.</td>
                   </tr>
                 )}
               </tbody>
             </table>
           </div>
         </div>
+        )}
       </div>
     </div>
   )
