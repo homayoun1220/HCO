@@ -47,7 +47,7 @@ export default {
     badge: 'Guide',
     title: 'How the study works',
     subtitle:
-      'You will face 20 timed challenges across four types. Read below, then start when you are ready — or try an optional demo first.',
+      'Read how each challenge type works, then choose a session below. Both paths are recorded and contribute to the research.',
     tipsTitle: 'Before you begin',
     tips: {
       timer: 'Each challenge has a countdown timer. Answer before time runs out.',
@@ -68,8 +68,14 @@ export default {
       biometric: 'Read a short phrase aloud. Your microphone will record — speak clearly when prompted.',
     },
     startStudy: 'Start 20 Challenges',
-    tryDemo: 'Try Optional Demo',
-    speedTrial: 'Speed Trial',
+    tryDemo: 'Try optional demo first',
+    speedTrial: 'Run Speed Trial',
+    mainStudyTitle: 'Main study',
+    mainStudyDesc: '20 timed challenges across all four types — the core session for the research.',
+    mainStudyDuration: '~15–20 min',
+    speedTrialTitle: 'Speed trial',
+    speedTrialDesc: '60 seconds of back-to-back challenges in one type — measures your throughput under pressure.',
+    speedTrialDuration: '~1 min',
     demoNote: 'The demo is not scored and does not count toward your results.',
   },
   practice: {

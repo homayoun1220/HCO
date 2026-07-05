@@ -104,43 +104,75 @@ export default function Guide() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.45 }}
-          className="flex flex-col sm:flex-row gap-3 justify-center items-stretch sm:items-center"
+          className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6"
         >
-          <motion.button
-            type="button"
-            onClick={startStudy}
-            whileHover={{ scale: 1.02, y: -1 }}
-            whileTap={{ scale: 0.98 }}
-            className="flex-1 sm:flex-none px-10 py-3.5 rounded-xl bg-white text-background font-semibold text-base shadow-lg shadow-black/20 hover:bg-gray-100 transition-colors"
+          <motion.div
+            whileHover={{ y: -2 }}
+            className="rounded-2xl ring-1 ring-white/10 bg-card/50 backdrop-blur-sm p-6 flex flex-col"
           >
-            {t('guide.startStudy')}
-          </motion.button>
+            <div className="flex items-start justify-between gap-3 mb-3">
+              <h2 className="text-lg font-semibold text-white">{t('guide.mainStudyTitle')}</h2>
+              <span className="text-[11px] font-mono text-gray-400 bg-white/5 px-2 py-0.5 rounded-md shrink-0">
+                {t('guide.mainStudyDuration')}
+              </span>
+            </div>
+            <p className="text-sm text-gray-400 leading-relaxed mb-6 flex-1">
+              {t('guide.mainStudyDesc')}
+            </p>
+            <motion.button
+              type="button"
+              onClick={startStudy}
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              className="w-full px-6 py-3.5 rounded-xl bg-white text-background font-semibold text-base shadow-lg shadow-black/20 hover:bg-gray-100 transition-colors"
+            >
+              {t('guide.startStudy')}
+            </motion.button>
+          </motion.div>
 
-          <motion.button
-            type="button"
-            onClick={() => navigate('/practice')}
-            whileHover={{ scale: 1.01 }}
-            whileTap={{ scale: 0.99 }}
-            className="flex-1 sm:flex-none px-10 py-3.5 rounded-xl ring-1 ring-white/15 text-gray-300 font-medium hover:ring-white/30 hover:text-white transition-colors"
+          <motion.div
+            whileHover={{ y: -2 }}
+            className="rounded-2xl ring-1 ring-white/10 bg-card/50 backdrop-blur-sm p-6 flex flex-col"
           >
-            {t('guide.tryDemo')}
-          </motion.button>
-
-          <motion.button
-            type="button"
-            onClick={() => {
-              markStudyEligible()
-              navigate('/speed-trial')
-            }}
-            whileHover={{ scale: 1.01 }}
-            whileTap={{ scale: 0.99 }}
-            className="flex-1 sm:flex-none px-10 py-3.5 rounded-xl ring-1 ring-white/15 text-gray-300 font-medium hover:ring-white/30 hover:text-white transition-colors"
-          >
-            {t('guide.speedTrial')}
-          </motion.button>
+            <div className="flex items-start justify-between gap-3 mb-3">
+              <h2 className="text-lg font-semibold text-white">{t('guide.speedTrialTitle')}</h2>
+              <span className="text-[11px] font-mono text-gray-400 bg-white/5 px-2 py-0.5 rounded-md shrink-0">
+                {t('guide.speedTrialDuration')}
+              </span>
+            </div>
+            <p className="text-sm text-gray-400 leading-relaxed mb-6 flex-1">
+              {t('guide.speedTrialDesc')}
+            </p>
+            <motion.button
+              type="button"
+              onClick={() => {
+                markStudyEligible()
+                navigate('/speed-trial')
+              }}
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              className="w-full px-6 py-3.5 rounded-xl bg-accent text-background font-semibold text-base shadow-lg shadow-accent/20 hover:brightness-110 transition-all"
+            >
+              {t('guide.speedTrial')}
+            </motion.button>
+          </motion.div>
         </motion.div>
 
-        <p className="text-center text-xs text-gray-600 mt-6">{t('guide.demoNote')}</p>
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.55 }}
+          className="text-center space-y-2"
+        >
+          <button
+            type="button"
+            onClick={() => navigate('/practice')}
+            className="text-sm text-gray-500 hover:text-accent underline-offset-4 hover:underline transition-colors"
+          >
+            {t('guide.tryDemo')}
+          </button>
+          <p className="text-xs text-gray-600">{t('guide.demoNote')}</p>
+        </motion.div>
       </div>
     </div>
   )

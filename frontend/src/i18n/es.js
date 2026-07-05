@@ -47,7 +47,7 @@ export default {
     badge: 'Guía',
     title: 'Cómo funciona el estudio',
     subtitle:
-      'Enfrentarás 20 desafíos cronometrados de cuatro tipos. Lee abajo y empieza cuando estés listo — o prueba primero la demo opcional.',
+      'Lee cómo funciona cada tipo de desafío y elige una sesión abajo. Ambas rutas se registran y contribuyen a la investigación.',
     tipsTitle: 'Antes de empezar',
     tips: {
       timer: 'Cada desafío tiene un temporizador. Responde antes de que se acabe el tiempo.',
@@ -68,8 +68,14 @@ export default {
       biometric: 'Lee una frase corta en voz alta. Tu micrófono grabará — habla claro cuando se indique.',
     },
     startStudy: 'Comenzar 20 Desafíos',
-    tryDemo: 'Probar Demo Opcional',
-    speedTrial: 'Prueba de Velocidad',
+    tryDemo: 'Probar demo opcional primero',
+    speedTrial: 'Iniciar Prueba de Velocidad',
+    mainStudyTitle: 'Estudio principal',
+    mainStudyDesc: '20 desafíos cronometrados de los cuatro tipos — la sesión central de la investigación.',
+    mainStudyDuration: '~15–20 min',
+    speedTrialTitle: 'Prueba de velocidad',
+    speedTrialDesc: '60 segundos de desafíos seguidos de un solo tipo — mide tu rendimiento bajo presión.',
+    speedTrialDuration: '~1 min',
     demoNote: 'La demo no se califica y no cuenta para tus resultados.',
   },
   practice: {
