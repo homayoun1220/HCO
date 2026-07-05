@@ -7,7 +7,7 @@ from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel
 
 import db
-from admin_analytics import build_analytics_report
+from admin_analytics import build_analytics_report, build_speed_trial_report
 from admin_auth import admin_configured, issue_token, require_admin, verify_password
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
@@ -56,6 +56,11 @@ async def admin_export(
 @router.get("/analytics")
 async def admin_analytics(_: None = Depends(require_admin)):
     return await build_analytics_report()
+
+
+@router.get("/speed-trials")
+async def admin_speed_trials(_: None = Depends(require_admin)):
+    return await build_speed_trial_report()
 
 
 @router.get("/health")

@@ -125,6 +125,19 @@ export default function Guide() {
           >
             {t('guide.tryDemo')}
           </motion.button>
+
+          <motion.button
+            type="button"
+            onClick={() => {
+              markStudyEligible()
+              navigate('/speed-trial')
+            }}
+            whileHover={{ scale: 1.01 }}
+            whileTap={{ scale: 0.99 }}
+            className="flex-1 sm:flex-none px-10 py-3.5 rounded-xl ring-1 ring-white/15 text-gray-300 font-medium hover:ring-white/30 hover:text-white transition-colors"
+          >
+            {t('guide.speedTrial')}
+          </motion.button>
         </motion.div>
 
         <p className="text-center text-xs text-gray-600 mt-6">{t('guide.demoNote')}</p>

@@ -69,6 +69,7 @@ export default {
     },
     startStudy: 'Comenzar 20 Desafíos',
     tryDemo: 'Probar Demo Opcional',
+    speedTrial: 'Prueba de Velocidad',
     demoNote: 'La demo no se califica y no cuenta para tus resultados.',
   },
   practice: {
@@ -141,5 +142,24 @@ export default {
     title: 'Algo salió mal al cargar este desafío.',
     desc: 'Inténtalo de nuevo o actualiza la página.',
     retry: 'Reintentar',
+  },
+  speedTrial: {
+    badge: 'Prueba de Velocidad',
+    title: 'Prueba de Velocidad',
+    subtitle:
+      'Un solo tipo de desafío durante 60 segundos, sin pausas. Responde tantos como puedas antes de que se acabe el tiempo — al resolver uno, el siguiente aparece de inmediato.',
+    loadError: 'Error al cargar el siguiente desafío. Inténtalo de nuevo.',
+    startError: 'No se pudo iniciar la prueba de velocidad. Inténtalo de nuevo.',
+    solved: 'Resueltos',
+    attempted: 'Intentados',
+    summaryTitle: '¡Ronda completada!',
+    solvesPerMin: 'Resueltos / minuto',
+    accuracy: 'Precisión',
+    meanLatency: 'Tiempo medio de respuesta',
+    measuredThroughput: 'Tu τh medido',
+    comparison:
+      'En la evaluación del artículo, los solucionadores automatizados promediaron {{autoLatency}}s por respuesta bajo este límite de {{deltaResp}}s — {{autoTauH}} respuestas válidas por ventana. Tú mediste {{tauH}}.',
+    runAgain: 'Otra ronda',
+    backToGuide: 'Volver a la guía',
   },
 }

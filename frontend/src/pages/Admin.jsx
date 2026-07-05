@@ -7,16 +7,19 @@ import {
   fetchAdminAnalytics,
   fetchAdminHealth,
   fetchAdminSessions,
+  fetchAdminSpeedTrials,
   fetchAdminStats,
   fetchPublicHealth,
   getAdminToken,
 } from '../adminApi'
 import AdminAnalytics from '../components/AdminAnalytics'
+import AdminSpeedTrials from '../components/AdminSpeedTrials'
 
 const REFRESH_MS = 15000
 const TABS = [
   { id: 'dashboard', label: 'Dashboard' },
   { id: 'analytics', label: 'Analytics' },
+  { id: 'speed-trials', label: 'Speed Trials' },
   { id: 'sessions', label: 'Sessions' },
 ]
 
@@ -35,11 +38,25 @@ function StatusBadge({ status }) {
     clean: 'bg-accent/15 text-accent border-accent/30',
     in_progress: 'bg-amber-500/15 text-amber-300 border-amber-500/30',
     completed_incomplete: 'bg-orange-500/15 text-orange-300 border-orange-500/30',
+    speed_complete: 'bg-violet-500/15 text-violet-300 border-violet-500/30',
     started: 'bg-gray-500/15 text-gray-300 border-gray-500/30',
   }
   return (
     <span className={`inline-flex px-2 py-1 rounded-lg border text-xs font-medium ${styles[status] || styles.started}`}>
       {status.replace('_', ' ')}
+    </span>
+  )
+}
+
+function ModeBadge({ mode }) {
+  const isSpeed = mode === 'speed_trial'
+  return (
+    <span
+      className={`inline-flex px-2 py-1 rounded-lg border text-xs font-medium ${
+        isSpeed ? 'bg-violet-500/15 text-violet-300 border-violet-500/30' : 'bg-white/5 text-gray-400 border-[#2a2a38]'
+      }`}
+    >
+      {isSpeed ? 'speed trial' : 'standard'}
     </span>
   )
 }
@@ -122,6 +139,7 @@ export default function Admin() {
   const [tab, setTab] = useState('dashboard')
   const [stats, setStats] = useState(null)
   const [analytics, setAnalytics] = useState(null)
+  const [speedTrials, setSpeedTrials] = useState(null)
   const [sessions, setSessions] = useState([])
   const [sessionsFilter, setSessionsFilter] = useState('clean')
   const [health, setHealth] = useState(null)
@@ -172,6 +190,18 @@ export default function Admin() {
     }
   }, [])
 
+  const loadSpeedTrials = useCallback(async () => {
+    try {
+      const data = await fetchAdminSpeedTrials()
+      setSpeedTrials(data)
+    } catch (err) {
+      if (err?.response?.status === 401) {
+        clearAdminToken()
+        setAuthed(false)
+      }
+    }
+  }, [])
+
   useEffect(() => {
     if (!authed) return undefined
     loadDashboard()
@@ -186,12 +216,20 @@ export default function Admin() {
     return () => clearInterval(id)
   }, [authed, tab, loadAnalytics])
 
+  useEffect(() => {
+    if (!authed || tab !== 'speed-trials') return undefined
+    loadSpeedTrials()
+    const id = setInterval(loadSpeedTrials, 30000)
+    return () => clearInterval(id)
+  }, [authed, tab, loadSpeedTrials])
+
   const handleLogout = () => {
     clearAdminToken()
     setAuthed(false)
     setStats(null)
     setSessions([])
     setAnalytics(null)
+    setSpeedTrials(null)
   }
 
   const visibleSessions = sessions.filter((row) => {
@@ -372,6 +410,8 @@ export default function Admin() {
 
         {tab === 'analytics' && <AdminAnalytics data={analytics} />}
 
+        {tab === 'speed-trials' && <AdminSpeedTrials data={speedTrials} />}
+
         {tab === 'sessions' && (
         <div className="rounded-2xl border border-[#2a2a38] bg-card p-6">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
@@ -405,6 +445,7 @@ export default function Admin() {
                   <th className="pb-3 pr-4">Participant</th>
                   <th className="pb-3 pr-4">Trials</th>
                   <th className="pb-3 pr-4">Passed</th>
+                  <th className="pb-3 pr-4">Mode</th>
                   <th className="pb-3 pr-4">Status</th>
                   <th className="pb-3">Completed</th>
                 </tr>
@@ -421,6 +462,9 @@ export default function Admin() {
                     <td className="py-3 pr-4">{row.trial_count}</td>
                     <td className="py-3 pr-4">{row.passed_count}</td>
                     <td className="py-3 pr-4">
+                      <ModeBadge mode={row.mode} />
+                    </td>
+                    <td className="py-3 pr-4">
                       <StatusBadge status={row.status} />
                     </td>
                     <td className="py-3">
@@ -430,7 +474,7 @@ export default function Admin() {
                 ))}
                 {!visibleSessions.length && (
                   <tr>
-                    <td colSpan={6} className="py-6 text-gray-500">No sessions match this filter.</td>
+                    <td colSpan={7} className="py-6 text-gray-500">No sessions match this filter.</td>
                   </tr>
                 )}
               </tbody>

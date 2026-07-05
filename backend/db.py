@@ -52,10 +52,20 @@ def utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+async def _migrate(db: aiosqlite.Connection) -> None:
+    """Additive, idempotent schema migrations for columns added after initial release."""
+    async with db.execute("PRAGMA table_info(sessions)") as cursor:
+        columns = {row[1] async for row in cursor}
+    if "mode" not in columns:
+        await db.execute("ALTER TABLE sessions ADD COLUMN mode TEXT NOT NULL DEFAULT 'standard'")
+    await db.commit()
+
+
 async def init_db() -> None:
     async with aiosqlite.connect(DB_PATH) as db:
         await db.executescript(SCHEMA)
         await db.commit()
+        await _migrate(db)
 
 
 async def create_session(
@@ -64,12 +74,13 @@ async def create_session(
     prolific_pid: str,
     study_id: str,
     block_order: List[str],
+    mode: str = "standard",
 ) -> None:
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute(
             """
-            INSERT INTO sessions (id, participant_id, prolific_pid, study_id, block_order, started_at)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO sessions (id, participant_id, prolific_pid, study_id, block_order, started_at, mode)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 session_id,
@@ -78,6 +89,7 @@ async def create_session(
                 study_id,
                 json.dumps(block_order),
                 utc_now(),
+                mode,
             ),
         )
         await db.commit()
@@ -220,8 +232,9 @@ async def export_trials_csv(clean_only: bool = False) -> str:
             SELECT t.id, t.participant_id, t.session_id, t.family, t.trial_index,
                    t.challenge_id, t.t_issue, t.t_recv, t.latency, t.correct, t.passed,
                    t.latency_fail, t.correctness_fail, t.delta_resp, t.response_raw,
-                   t.status, t.created_at
+                   t.status, t.created_at, s.mode
             FROM trials t
+            JOIN sessions s ON s.id = t.session_id
         """
         if clean_only:
             query += """
@@ -229,6 +242,7 @@ async def export_trials_csv(clean_only: bool = False) -> str:
               AND t.session_id IN (
                 SELECT s.id FROM sessions s
                 WHERE s.completed_at IS NOT NULL
+                  AND s.mode = 'standard'
                   AND (SELECT COUNT(*) FROM trials tt
                        WHERE tt.session_id = s.id AND tt.status = 'submitted') = 20
               )
@@ -241,7 +255,7 @@ async def export_trials_csv(clean_only: bool = False) -> str:
             rows = await cursor.fetchall()
 
     if not rows:
-        return "id,participant_id,session_id,family,trial_index,challenge_id,t_issue,t_recv,latency,correct,passed,latency_fail,correctness_fail,delta_resp,response_raw,status,created_at\n"
+        return "id,participant_id,session_id,family,trial_index,challenge_id,t_issue,t_recv,latency,correct,passed,latency_fail,correctness_fail,delta_resp,response_raw,status,created_at,mode\n"
 
     headers = rows[0].keys()
     lines = [",".join(headers)]
@@ -268,11 +282,11 @@ async def get_admin_stats(active_window_seconds: int = 900) -> Dict[str, Any]:
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory = aiosqlite.Row
 
-        async with db.execute("SELECT COUNT(*) FROM sessions") as cursor:
+        async with db.execute("SELECT COUNT(*) FROM sessions WHERE mode = 'standard'") as cursor:
             sessions_total = (await cursor.fetchone())[0]
 
         async with db.execute(
-            "SELECT COUNT(*) FROM sessions WHERE completed_at IS NOT NULL"
+            "SELECT COUNT(*) FROM sessions WHERE completed_at IS NOT NULL AND mode = 'standard'"
         ) as cursor:
             participants_completed = (await cursor.fetchone())[0]
 
@@ -280,6 +294,7 @@ async def get_admin_stats(active_window_seconds: int = 900) -> Dict[str, Any]:
             """
             SELECT COUNT(*) FROM sessions s
             WHERE s.completed_at IS NOT NULL
+              AND s.mode = 'standard'
               AND (SELECT COUNT(*) FROM trials t
                    WHERE t.session_id = s.id AND t.status = 'submitted') = 20
             """
@@ -288,7 +303,9 @@ async def get_admin_stats(active_window_seconds: int = 900) -> Dict[str, Any]:
 
         async with db.execute(
             """
-            SELECT COUNT(DISTINCT participant_id) FROM trials WHERE status = 'submitted'
+            SELECT COUNT(DISTINCT t.participant_id) FROM trials t
+            JOIN sessions s ON s.id = t.session_id
+            WHERE t.status = 'submitted' AND s.mode = 'standard'
             """
         ) as cursor:
             participants_with_trials = (await cursor.fetchone())[0]
@@ -300,6 +317,7 @@ async def get_admin_stats(active_window_seconds: int = 900) -> Dict[str, Any]:
             WHERE t.status = 'submitted'
               AND t.t_recv >= ?
               AND s.completed_at IS NULL
+              AND s.mode = 'standard'
             """,
             (active_since,),
         ) as cursor:
@@ -307,15 +325,20 @@ async def get_admin_stats(active_window_seconds: int = 900) -> Dict[str, Any]:
 
         async with db.execute(
             """
-            SELECT COUNT(*) FROM sessions
+            SELECT COUNT(*) FROM sessions s
             WHERE completed_at IS NULL
+              AND s.mode = 'standard'
               AND id IN (SELECT DISTINCT session_id FROM trials WHERE status = 'submitted')
             """
         ) as cursor:
             sessions_in_progress = (await cursor.fetchone())[0]
 
         async with db.execute(
-            "SELECT COUNT(*), SUM(passed) FROM trials WHERE status = 'submitted'"
+            """
+            SELECT COUNT(*), SUM(t.passed) FROM trials t
+            JOIN sessions s ON s.id = t.session_id
+            WHERE t.status = 'submitted' AND s.mode = 'standard'
+            """
         ) as cursor:
             row = await cursor.fetchone()
             trials_submitted = row[0] or 0
@@ -324,14 +347,16 @@ async def get_admin_stats(active_window_seconds: int = 900) -> Dict[str, Any]:
         by_family = []
         async with db.execute(
             """
-            SELECT family,
+            SELECT t.family,
                    COUNT(*) AS n,
-                   SUM(passed) AS passed,
-                   AVG(latency) AS mean_latency,
-                   AVG(latency_fail) AS latency_fail_rate,
-                   AVG(correctness_fail) AS correctness_fail_rate
-            FROM trials WHERE status = 'submitted'
-            GROUP BY family ORDER BY family
+                   SUM(t.passed) AS passed,
+                   AVG(t.latency) AS mean_latency,
+                   AVG(t.latency_fail) AS latency_fail_rate,
+                   AVG(t.correctness_fail) AS correctness_fail_rate
+            FROM trials t
+            JOIN sessions s ON s.id = t.session_id
+            WHERE t.status = 'submitted' AND s.mode = 'standard'
+            GROUP BY t.family ORDER BY t.family
             """
         ) as cursor:
             for row in await cursor.fetchall():
@@ -369,7 +394,7 @@ async def get_admin_sessions(total_trials: int = 20) -> List[Dict[str, Any]]:
         db.row_factory = aiosqlite.Row
         async with db.execute(
             """
-            SELECT s.id, s.participant_id, s.prolific_pid, s.started_at, s.completed_at,
+            SELECT s.id, s.participant_id, s.prolific_pid, s.started_at, s.completed_at, s.mode,
                    (SELECT COUNT(*) FROM trials t
                     WHERE t.session_id = s.id AND t.status = 'submitted') AS trial_count,
                    (SELECT SUM(passed) FROM trials t
@@ -386,7 +411,11 @@ async def get_admin_sessions(total_trials: int = 20) -> List[Dict[str, Any]]:
     for row in rows:
         trial_count = row["trial_count"] or 0
         completed = row["completed_at"] is not None
-        if completed and trial_count == total_trials:
+        mode = row["mode"] or "standard"
+
+        if mode == "speed_trial":
+            status = "speed_complete" if completed else ("in_progress" if trial_count > 0 else "started")
+        elif completed and trial_count == total_trials:
             status = "clean"
         elif completed:
             status = "completed_incomplete"
@@ -402,6 +431,7 @@ async def get_admin_sessions(total_trials: int = 20) -> List[Dict[str, Any]]:
                 "prolific_pid": row["prolific_pid"] or "",
                 "started_at": row["started_at"],
                 "completed_at": row["completed_at"],
+                "mode": mode,
                 "trial_count": trial_count,
                 "passed_count": row["passed_count"] or 0,
                 "last_activity": row["last_activity"],
@@ -415,6 +445,7 @@ def _clean_sessions_subquery(total_trials: int) -> str:
     return f"""
         SELECT s.id FROM sessions s
         WHERE s.completed_at IS NOT NULL
+          AND s.mode = 'standard'
           AND (SELECT COUNT(*) FROM trials t
                WHERE t.session_id = s.id AND t.status = 'submitted') = {int(total_trials)}
     """
@@ -459,3 +490,61 @@ async def fetch_clean_completion_timeline(total_trials: int = 20) -> List[Dict[s
         ) as cursor:
             rows = await cursor.fetchall()
     return [{"date": row["day"], "completions": row["completions"]} for row in rows if row["day"]]
+
+
+async def get_speed_trial_stats() -> List[Dict[str, Any]]:
+    """Per-family aggregates over completed Speed Trial rounds (mode='speed_trial')."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+
+        async with db.execute(
+            "SELECT id, block_order FROM sessions WHERE mode = 'speed_trial' AND completed_at IS NOT NULL"
+        ) as cursor:
+            session_rows = await cursor.fetchall()
+
+        sessions_by_family: Dict[str, List[str]] = {}
+        for row in session_rows:
+            family_order = json.loads(row["block_order"])
+            family = family_order[0] if family_order else None
+            if family:
+                sessions_by_family.setdefault(family, []).append(row["id"])
+
+        results: List[Dict[str, Any]] = []
+        for family, session_ids in sessions_by_family.items():
+            placeholders = ",".join("?" for _ in session_ids)
+            async with db.execute(
+                f"""
+                SELECT session_id, delta_resp,
+                       COUNT(*) AS attempted,
+                       SUM(passed) AS passed,
+                       AVG(CASE WHEN passed THEN latency END) AS mean_pass_latency
+                FROM trials
+                WHERE status = 'submitted' AND session_id IN ({placeholders})
+                GROUP BY session_id
+                """,
+                session_ids,
+            ) as cursor:
+                per_session = await cursor.fetchall()
+
+            if not per_session:
+                continue
+
+            solves = [r["passed"] or 0 for r in per_session]
+            accuracies = [(r["passed"] or 0) / r["attempted"] for r in per_session if r["attempted"]]
+            pass_latencies = [r["mean_pass_latency"] for r in per_session if r["mean_pass_latency"] is not None]
+            delta_resp = per_session[0]["delta_resp"] or 0.0
+            mean_latency = sum(pass_latencies) / len(pass_latencies) if pass_latencies else 0.0
+
+            results.append(
+                {
+                    "family": family,
+                    "rounds": len(session_ids),
+                    "mean_solves_per_round": round(sum(solves) / len(solves), 2) if solves else 0.0,
+                    "mean_accuracy": round(sum(accuracies) / len(accuracies), 3) if accuracies else 0.0,
+                    "mean_latency": round(mean_latency, 2),
+                    "delta_resp": delta_resp,
+                    "measured_tau_h": int(delta_resp // mean_latency) if mean_latency > 0 else 0,
+                }
+            )
+
+        return results

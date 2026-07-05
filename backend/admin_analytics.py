@@ -9,6 +9,15 @@ FAMILIES = ["perceptual", "reasoning", "attention", "biometric"]
 LATENCY_BUCKETS = [(0, 2), (2, 4), (4, 6), (6, 8), (8, 10), (10, 999)]
 TOTAL_TRIALS = 20
 
+# Automated-solver baseline from hco.tex Table 2 (tab:evaluation-results), under
+# the same delta_resp deadlines Speed Trial uses. Mean automated response time
+# exceeds delta_resp for both families, so their effective measured tau_h is 0 —
+# the real, citable point of comparison for a human's measured throughput.
+PAPER_BASELINE = {
+    "perceptual": {"auto_success_rate": 0.12, "auto_mean_latency": 18.4, "delta_resp": 8.0},
+    "reasoning": {"auto_success_rate": 0.18, "auto_mean_latency": 22.1, "delta_resp": 12.0},
+}
+
 
 def _percentile(values: List[float], p: float) -> float:
     if not values:
@@ -216,4 +225,19 @@ async def build_analytics_report() -> Dict[str, Any]:
         "latency_histograms": latency_histograms,
         "timeline": timeline,
         "insights": generate_insights(participants_clean, families),
+    }
+
+
+async def build_speed_trial_report() -> Dict[str, Any]:
+    families = await db.get_speed_trial_stats()
+    for fam in families:
+        baseline = PAPER_BASELINE.get(fam["family"])
+        if baseline:
+            auto_tau_h = int(baseline["delta_resp"] // baseline["auto_mean_latency"])
+            fam["paper_baseline"] = {**baseline, "auto_tau_h": auto_tau_h}
+
+    return {
+        "generated_at": time.time(),
+        "rounds_total": sum(f["rounds"] for f in families),
+        "families": families,
     }

@@ -69,6 +69,11 @@ export async function fetchAdminAnalytics() {
   return data
 }
 
+export async function fetchAdminSpeedTrials() {
+  const { data } = await adminClient().get('/api/admin/speed-trials')
+  return data
+}
+
 export async function fetchPublicHealth() {
   const { data } = await axios.get(`${API_BASE}/api/health`)
   return data

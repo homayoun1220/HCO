@@ -5,6 +5,7 @@ import Welcome from './pages/Welcome'
 import Consent from './pages/Consent'
 import Guide from './pages/Guide'
 import Practice from './pages/Practice'
+import SpeedTrial from './pages/SpeedTrial'
 import Study from './pages/Study'
 import Debrief from './pages/Debrief'
 import Admin from './pages/Admin'
@@ -36,6 +37,7 @@ export default function App() {
         <Route path="/consent" element={<Consent />} />
         <Route path="/guide" element={<Guide />} />
         <Route path="/practice" element={<Practice />} />
+        <Route path="/speed-trial" element={<SpeedTrial />} />
         <Route
           path="/study"
           element={

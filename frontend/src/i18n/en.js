@@ -69,6 +69,7 @@ export default {
     },
     startStudy: 'Start 20 Challenges',
     tryDemo: 'Try Optional Demo',
+    speedTrial: 'Speed Trial',
     demoNote: 'The demo is not scored and does not count toward your results.',
   },
   practice: {
@@ -141,5 +142,24 @@ export default {
     title: 'Something went wrong loading this challenge.',
     desc: 'Please try again or refresh the page.',
     retry: 'Retry',
+  },
+  speedTrial: {
+    badge: 'Speed Trial',
+    title: 'Speed Trial',
+    subtitle:
+      "60 seconds, one challenge type, back-to-back. Answer as many as you can before the clock runs out — solve one and the next appears immediately.",
+    loadError: 'Failed to load the next challenge. Please try again.',
+    startError: 'Could not start the speed trial. Please try again.',
+    solved: 'Solved',
+    attempted: 'Attempted',
+    summaryTitle: 'Round complete!',
+    solvesPerMin: 'Solved / minute',
+    accuracy: 'Accuracy',
+    meanLatency: 'Mean response time',
+    measuredThroughput: 'Your measured τh',
+    comparison:
+      "In the paper's evaluation, automated solvers averaged {{autoLatency}}s per response under this {{deltaResp}}s deadline — {{autoTauH}} valid responses per window. You measured {{tauH}}.",
+    runAgain: 'Run again',
+    backToGuide: 'Back to guide',
   },
 }

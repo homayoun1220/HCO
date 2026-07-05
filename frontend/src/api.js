@@ -7,8 +7,13 @@ const api = axios.create({
   headers: { 'Content-Type': 'application/json' },
 })
 
-export const startSession = (prolificPid, studyId) =>
-  api.post('/api/session/start', { prolific_pid: prolificPid, study_id: studyId })
+export const startSession = (prolificPid, studyId, opts = {}) =>
+  api.post('/api/session/start', {
+    prolific_pid: prolificPid,
+    study_id: studyId,
+    mode: opts.mode ?? 'standard',
+    family: opts.family ?? '',
+  })
 
 export const issueChallenge = (sessionId, family, trialIndex) =>
   api.post('/api/challenge/issue', {

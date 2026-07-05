@@ -22,6 +22,12 @@ TRIALS_PER_FAMILY = 5
 TOTAL_TRIALS = len(FAMILIES) * TRIALS_PER_FAMILY
 COMPLETION_CODE = os.environ.get("HCO_COMPLETION_CODE", "HCO-STUDY-COMPLETE")
 
+# Families admissible for rapid back-to-back play (Speed Trial mode): attention
+# and biometric challenges occupy the full delta_resp window per response
+# (hco.tex Section 6.2), so only perceptual/reasoning support saturating a
+# window with many independent challenges.
+SPEED_TRIAL_FAMILIES = ["perceptual", "reasoning"]
+
 GENERATORS = {
     "perceptual": (perceptual.generate_challenge, perceptual.verify_response),
     "reasoning": (reasoning.generate_challenge, reasoning.verify_response),
@@ -61,6 +67,8 @@ app.include_router(admin_router)
 class SessionStartRequest(BaseModel):
     prolific_pid: str = ""
     study_id: str = ""
+    mode: str = "standard"
+    family: str = ""
 
 
 class ChallengeIssueRequest(BaseModel):
@@ -86,10 +94,19 @@ async def health():
 
 @app.post("/api/session/start")
 async def session_start(body: SessionStartRequest):
+    if body.mode not in ("standard", "speed_trial"):
+        raise HTTPException(status_code=400, detail=f"Unknown mode: {body.mode}")
+
     session_id = str(uuid.uuid4())
     participant_id = secrets.token_hex(16)
-    block_order = FAMILIES.copy()
-    random.shuffle(block_order)
+
+    if body.mode == "speed_trial":
+        if body.family not in SPEED_TRIAL_FAMILIES:
+            raise HTTPException(status_code=400, detail=f"Unsupported speed trial family: {body.family}")
+        block_order = [body.family]
+    else:
+        block_order = FAMILIES.copy()
+        random.shuffle(block_order)
 
     await db.create_session(
         session_id=session_id,
@@ -97,6 +114,7 @@ async def session_start(body: SessionStartRequest):
         prolific_pid=body.prolific_pid,
         study_id=body.study_id,
         block_order=block_order,
+        mode=body.mode,
     )
 
     return {
@@ -115,9 +133,10 @@ async def challenge_issue(body: ChallengeIssueRequest):
     if session.get("completed_at"):
         raise HTTPException(status_code=409, detail="Study already completed")
 
-    submitted_trials = await db.count_submitted_trials(body.session_id)
-    if submitted_trials >= TOTAL_TRIALS:
-        raise HTTPException(status_code=409, detail="Study already completed")
+    if session.get("mode", "standard") == "standard":
+        submitted_trials = await db.count_submitted_trials(body.session_id)
+        if submitted_trials >= TOTAL_TRIALS:
+            raise HTTPException(status_code=409, detail="Study already completed")
 
     if body.family not in GENERATORS:
         raise HTTPException(status_code=400, detail=f"Unknown family: {body.family}")
